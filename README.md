@@ -9,7 +9,8 @@ To be specific, Star Lake has the following characteristics:
   - Multi-level partitioning and efficient upsert: Star Lake supports range and hash partitioning, and a flexible upsert operation at row and column level. The upsert data are stored as delta files, which greatly improves the efficiency and concurrency of writing data, and the optimized merge scan provides efficient MergeOnRead performance.
   - Streaming and batch unification: Streaming Sink is supported in Star Lake, which can handle streaming data ingesting, historical data filling in batch, interactive query and other scenarios simultaneously.
   - Schema evolution: Users can add new fields at any time and quickly populate the new fields with historical data.
-  
+
+
 Scenario of Star Lake:
   - Incremental data need to be written efficiently in large batches in real time, as well as concurrent updates at the row or column level.
   - Detailed query and update on a large time range with huge amount historical data, while hoping to maintain a low cost
@@ -34,7 +35,7 @@ Scenario of Star Lake:
 
 
 # Performance Comparison Between Star Lake and Iceberg
-In above data Lake solutions, Delta Lake open source version exists to feed commercial version, and the community is inactive. Hudi focuses on the streaming scenario, and does not support concurrent write, as a data lake solution, the application scenario is too narrow. Iceberg, with its elegant abstract design and active community, as well as more and more new features as the version is updated, is one of the best data lake solution at present, so we choose Iceberg to compare performance.
+In above data Lake solutions, Delta Lake open source version exists to feed commercial version, and the community is inactive. Hudi focuses on the streaming scenario, and does not support concurrent write, as a data lake solution, its application scenario is too narrow. Iceberg, with its elegant abstract design and active community, as well as more and more new features as the version is updated, is one of the best data lake solution at present, so we choose Iceberg to compare performance.
 
 ![performance comparison](doc/performance_comparison.png)
 
@@ -55,25 +56,25 @@ In above data Lake solutions, Delta Lake open source version exists to feed comm
 
 The table name in Star Lake is a path, and the path where the data is stored is the table name.
 
-When the Dataframe.write(or writeStream) is called to write data to StarTable, a new table will automatically created using the storage path if the table does not exist.
+When Dataframe.write(or writeStream) is called to write data to StarTable, a new table will automatically created using the storage path if the table does not exist.
 
 
 ### 1.2 Metadata Management
-Star Lake manages metadata through cassandra, so it can process metadata efficiently and meta clusters can be easily scaled up in the cloud.
+Star Lake manages metadata through cassandra, so it can process metadata efficiently, and the meta cluster can be easily scaled up in the cloud.
 
-You need to specify the cassandra cluster address when you use it, which can be configured into the spark environment or can be specified when the job is running.
+You need to specify the cassandra cluster address when you use Star Lake, which can be configured in spark environment or can be specified when submitting job.
 
 
 ### 1.3 Partition
-StarTable can be partitioned in two ways, range and hash, and both can be used at the same time.
+StarTable can be partitioned in two ways, range and hash, and they can be used at the same time.
   - Range partition is a common time-based table partition. Data files of different partitions are stored in different partition paths.
-  - To use a hash partition, you must specify both the hash primary key field and the hash bucket num. The hash bucket num is used to hash the hash primary key field in the hash partition.
-  - If you specify a range partition and a hash partition, each range partition will have the same hash value written to the same file.
+  - To use a hash partition, you must specify both the hash primary key fields and the hash bucket num. The hash bucket num is used to hash the hash primary key fields.
+  - If you specify both range partition and hash partition, each range partition will have the same hash key written to file with the same bucket id.
   - When partitioning is specified, data written to StarTable must contain partitioning fields.
 
 Depending on the specific scenario, you can choose to use a range partition, a hash partition, or both. When a hash partition is specified, the data in StarTable will be unique by the primary key, which is the hash partition field + range partition field (if any).
 
-StarTable supports the upsert operation only if the hash partition is specified.
+StarTable supports upsert operation only if the hash partition is specified.
 
 ### 1.4 Code Examples
 ```scala
@@ -112,7 +113,7 @@ writeStream.awaitTermination()
 ```
 
 ## 2. Read StarTable
-The data can be read through the Spark Read API or by building Startable. Star Lake also supports reading data through Spark SQL, see [8. Use Spark SQL On StarTable](#8-Use Spark SQL On StarTable)
+You can read data by Spark API or building StarTable, Spark SQL is also supported, see [8. Operate StarTable by Spark SQL](#8-operate-startable-by-spark-sql)
 
 ### 2.1 Code Examples
 ```scala
@@ -123,10 +124,10 @@ val spark = SparkSession.builder.master("local")
   .getOrCreate()
 val tablePath = "s3a://bucket-name/table/path/is/also/table/name"
 
-
+//by spark api
 val df1 = spark.read.format("star").load(tablePath)
 
-
+//by StarTable
 import com.engineplus.star.tables.StarTable
 val df2 = StarTable.forPath(tablePath).toDF
 
@@ -135,12 +136,11 @@ val df2 = StarTable.forPath(tablePath).toDF
 ## 3. Upsert StarTable
 
 ### 3.1 Batch
-Upsert functionality is supported when Startable uses hash partitioning.
+Upsert is supported when hash partitioning has been specified.
 
-By default, using MergeonRead mode, upsert data is written to the table path in the form of a delta file, and Star Lake provides efficient upsert and Merge Scan performance.
+MergeOnRead is used by default, upsert data is written as delta files. Star Lake provides efficient upsert and merge scan performance.
 
-Parameters can be set by the spark. Engineplus. Star. DeltaFile. Enabled to false CopyOnWrite open mode, each upsert generated eventually merge data, but is not recommended, because writing efficiency is very poor and concurrent degree is low.
-
+Parameter spark.engineplus.star.deltaFile.enabled can be set to false to use CopyOnWrite mode, eventually merged data will be generated after upsert, but this mode is not recommended, because it has poor performance and low concurrent.
 
 #### 3.1.1 Code Examples
 ```scala
@@ -160,16 +160,14 @@ val extraDF = Seq(("2021-01-01",3,"chicken")).toDF("date","id","name")
 starTable.upsert(extraDF)
 ```
 
-### 3.2 Streaming
-In a streaming scenario, if OutputMode is complete, each write will overwrite the previous data.
-
-When outputMode is APPEND or UPDATE, if a hash partition is specified, each write is treated as an upsert update, and if data with the same primary key exists at read time, the latest value of the same field overrides the previous value. Update OutputMode is available only if the hash partition is specified.
-Duplicate data is allowed if no hash partitioning is used.
+### 3.2 Streaming Support
+In streaming, when outputMode is complete, each write will overwrite all previous data.
   
+When outputMode is append or update, if hash partition is specified, each write is treated as an upsert, if data with the same primary key exists at read time, the latest value of the same key overrides the previous one. Update mode is available only if hash partition is specified.  
+Duplicate data is allowed if no hash partitioning is used. 
 
 ## 4. Update StarTable
-Star Lake supports update operations, which are performed by specifying the condition and the field Expression that needs to be updated. There are several ways you can perform the update, see the com engineplus. Star. Name StarTable annotations.
-
+Star Lake supports update operations, which are performed by specifying the condition and the field Expression that needs to be updated. There are several ways to perform update, see annotations in com.engineplus.star.tables.StarTable.
 
 ### 4.1 Code Examples
 ```scala
@@ -190,6 +188,7 @@ starTable.update(col("date") > "2021-01-01", Map("data" -> lit("2021-01-02")))
 ```
 
 ## 5. Delete Data
+Star Lake supports delete operation to delete data that meet the conditions. Conditions can be any field, and if no condition is specified, all data in table will be deleted.
 
 ### 5.1 Code Examples
 ```scala
@@ -203,13 +202,20 @@ val spark = SparkSession.builder.master("local")
 val tablePath = "s3a://bucket-name/table/path/is/also/table/name"
 val starTable = StarTable.forPath(tablePath)
 
-
+//delete data that meet the condition
 starTable.delete("date='2021-01-01'")
-
+//delete full table data
 starTable.delete()
 ```
 
 ## 6. Compaction
+Upsert will generates delta files, which can affect read efficiency when delta files num become too large, in this time, compaction can be performed to merge files.
+
+When compaction is performed to the full table, you can set conditions for compaction, only range partitions that meet the conditions will perform compaction.
+
+Conditions to trigger compaction:
+1. The last modification time for a range partition is before spark.engineplus.star.compaction.interval (ms), default is 12 hours
+2. Delta file num exceeds spark.engineplus.star.deltaFile.max.num, default is 5
 
 ### 6.1 Code Examples
 ```scala
@@ -223,13 +229,23 @@ val spark = SparkSession.builder.master("local")
 val tablePath = "s3a://bucket-name/table/path/is/also/table/name"
 val starTable = StarTable.forPath(tablePath)
 
+//compaction on the specified partition
 starTable.compaction("date='2021-01-01'")
+//compAction on all partitions of the table
 starTable.compaction()
+//compaction on all partitions, but only partitions meet the conditions will be performed
 starTable.compaction(false)
 
 ```
 
 ## 7. Cleanup
+Cleanup operation is used to clean useless data files and meta information in StarTable.
+
+Operations like update, delete, upsert, compaction are not actually delete the data files on the storage, if you want to cleanup the useless data, you can perform a Cleanup operation.
+
+By default, Cleanup operation will clean up the data which last modified time before 5 hours, you can set spark.engineplus.star.cleanup.interval to modify this time.
+
+Parameter spark.engineplus.star.cleanup.parallelism is used to control the parallelism when listing files, default value is 50. If the table has to much partitions and files, you can appropriate adjust it.
 
 ### 7.1 Code Examples
 ```scala
@@ -246,7 +262,13 @@ val starTable = StarTable.forPath(tablePath)
 starTable.cleanup()
 ```
 
-## 8. Use Spark SQL On StarTable
+## 8. Operate StarTable by Spark SQL 
+Spark SQL is supported to read and write StarTable. To use it, you need to set spark.sql.catalog.spark_catalog to StarLakeCatalog.
+
+Note:
+  - Insert into statement turns autoMerge on by default
+  - Spark SQL does not support to set hash partition while creating a StarTable
+  - Some Spark SQL statements are not supported, see org.apache.spark.sql.star.rules.StarLakeUnsupportedOperationsCheck
 
 ### 8.1 Code Examples
 ```scala
@@ -261,19 +283,34 @@ val spark = SparkSession.builder.master("local")
 val tablePath = "s3a://bucket-name/table/path/is/also/table/name"
 spark.range(10).createOrReplaceTempView("tmpView")
 
+//write
 spark.sql(s"insert into table star.`$tablePath` select * from tmpView")
 
+//read
 spark.sql(s"select * from star.`$tablePath`").show()
 
 ```
 
 ## 9. Operator on Hash Primary Keys
+When hash partition is specified, the data in each range partition is partitioned according to the hash primary key and the partitioned data is ordered. Therefore, there is no need to do shuffle and sort when some operators perform on hash primary key.
+
+Star Lake currently supports optimization of join, intersect, and except, and more operators will be supported in the future.
 
 ### 9.1 Join on Hash Keys
+Scenarios:
+  - Shuffle and sort are not required when data from different partitions of the same table is joined on the hash keys
+  - If two different tables have the same hash field type and number of fields, and the same hash bucket num, there is no need to shuffle and sort when they are joined  on the hash keys
 
+The test result shows that the efficiency of optimized join is 2.5 times that of Iceberg.
 
 ### 9.2 Intersect/Except on Hash Keys
+Scenarios:
+  - Intersect/Except on hash keys for different partitions of the same table does not require shuffle, sort, and distinct
+  - Intersect/Except on hash keys for different tables that have the same type and number of hash keys, and the same hash bucket num, there is no need to shuffle, sort, and distinct 
 
+In a range partition, the hash primary keys are unique, so the results of intersect or except are not repeated, so the subsequent operations do not need to deduplicate again. For example, you can directly `count` the number of data, without the need for `count distinc`.
+
+The test result shows that the efficiency of optimized intersect and except is 3.9 times and 3.6 times that of Iceberg respectively.
 
 ### 9.3 Code Examples
 ```scala
@@ -308,6 +345,8 @@ df2.write
   .save(tablePath2)
 
 
+//join on hash keys without shuffle and sort
+//different range partitions for the same table
 spark.sql(
   s"""
     |select t1.*,t2.* from
@@ -317,7 +356,7 @@ spark.sql(
     | on t1.id1=t2.id1 and t1.id2=t2.id2
   """.stripMargin)
     .show()
-
+//different tables with the same hash setting
 spark.sql(
   s"""
     |select t1.*,t2.* from
@@ -329,7 +368,7 @@ spark.sql(
   .show()
 
 //intersect/except on hash keys without shuffle,sort and distinct
-
+//different range partitions for the same table
 spark.sql(
   s"""
     |select count(1) from 
@@ -338,7 +377,7 @@ spark.sql(
     | select id1,id2 from star.`$tablePath1` where date='2021-01-02') t
   """.stripMargin)
   .show()
-
+//different tables with the same hash setting
 spark.sql(
   s"""
     |select count(1) from 
@@ -351,8 +390,10 @@ spark.sql(
 ```
 
 ## 10. Schema Evolution
+Star Lake supports Schema Evolution, new columns allowed to be added (partitioning fields cannot be modified). When a new column is added and the existing data is read, the new column will be NULL. You can fill the new columns by upsert operation.
 
 ### 10.1 Merge Schema
+Specify `mergeSchema` to `true` or enable `autoMerge` to merge the schema when writing data. The new schema is the union of table schema and the current written data schema.
 
 ### 10.2 Code Examples
 ```scala
@@ -362,20 +403,20 @@ df.write
   .option("rangePartitions","date")
   .option("hashPartitions","id")
   .option("hashBucketNum","2")
-
+  //first way
   .option("mergeSchema","true")
   .save(tablePath)
   
 val spark = SparkSession.builder.master("local")
   .config("spark.engineplus.star.meta.host", "cassandra_host")
   .config("spark.sql.extensions", "com.engineplus.star.sql.StarSparkSessionExtension")
-
+  //second way
   .config("spark.engineplus.star.schema.autoMerge.enabled", "true")
   .getOrCreate()
 ```
 
 ## 11. Drop Partition
-
+Drop a partition, also known as drop range partition, does not actually delete the data files. You can use the Cleanup operation to cleanup stale data.
 
 ### 11.1 Code Examples
 ```scala
@@ -389,13 +430,13 @@ val spark = SparkSession.builder.master("local")
 val tablePath = "s3a://bucket-name/table/path/is/also/table/name"
 val starTable = StarTable.forPath(tablePath)
 
-
+//drop the specified range partition
 starTable.dropPartition("date='2021-01-01'")
 
 ```
 
 ## 12. Drop Table
-
+Drop table will directly deletes all the metadata and files.
 
 ### 12.1 Code Examples
 ```scala
@@ -409,7 +450,7 @@ val spark = SparkSession.builder.master("local")
 val tablePath = "s3a://bucket-name/table/path/is/also/table/name"
 val starTable = StarTable.forPath(tablePath)
 
-
+//drop table
 starTable.dropTable()
 
 ```
