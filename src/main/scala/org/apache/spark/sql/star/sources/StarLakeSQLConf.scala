@@ -1,0 +1,250 @@
+/*
+ * Copyright [2021] [EnginePlus Team]
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
+package org.apache.spark.sql.star.sources
+
+import org.apache.spark.internal.config.{ConfigBuilder, ConfigEntry}
+import org.apache.spark.sql.internal.SQLConf
+
+object StarLakeSQLConf {
+
+  def buildConf(key: String): ConfigBuilder = SQLConf.buildConf(s"spark.engineplus.star.$key")
+
+  def buildStaticConf(key: String): ConfigBuilder =
+    SQLConf.buildStaticConf(s"spark.engineplus.star.$key")
+
+  val SCHEMA_AUTO_MIGRATE: ConfigEntry[Boolean] =
+    buildConf("schema.autoMerge.enabled")
+      .doc("If true, enables schema merging on appends and on overwrites.")
+      .booleanConf
+      .createWithDefault(false)
+
+
+  val USE_DELTA_FILE: ConfigEntry[Boolean] =
+    buildConf("deltaFile.enabled")
+      .doc("If true, enables delta files on specific scene(e.g. upsert).")
+      .booleanConf
+      .createWithDefault(true)
+
+  val MAX_DELTA_FILE_NUM: ConfigEntry[Int] =
+    buildConf("deltaFile.max.num")
+      .doc("Maximum delta files allowed, default is 5.")
+      .intConf
+      .createWithDefault(5)
+
+  val COMPACTION_TIME: ConfigEntry[Long] =
+    buildConf("compaction.interval")
+      .doc("If the last update time exceeds the set interval, compression is triggered, default is 12 hours.")
+      .longConf
+      .createWithDefault(12 * 60 * 60 * 1000L)
+
+  // History file cleanup interval
+  val OLD_VERSION_RETENTION_TIME: ConfigEntry[Long] =
+    buildConf("cleanup.interval")
+      .doc("Retention time of old version data, default is 5 hours.")
+      .longConf
+      .createWithDefault(5 * 60 * 60 * 1000L)
+
+  val CLEANUP_PARALLELISM: ConfigEntry[Int] =
+    buildConf("cleanup.parallelism")
+      .doc("The number of parallelism to list a collection of path recursively when cleanup, default is 50.")
+      .intConf
+      .createWithDefault(50)
+
+  //默认的meta数据库名
+  val META_DATABASE_NAME: ConfigEntry[String] =
+    buildConf("meta.database.name")
+      .doc(
+        """
+          |Default database of meta tables in Cassandra.
+        """.stripMargin)
+      .stringConf
+      .createWithDefault("star_meta")
+
+
+  val META_HOST: ConfigEntry[String] =
+    buildConf("meta.host")
+      .doc(
+        """
+          |Contact point to connect to the Cassandra cluster.
+          |A comma separated list may also be used.("127.0.0.1,192.168.0.1")
+        """.stripMargin)
+      .stringConf
+      .createWithDefault("localhost")
+
+  val META_PORT: ConfigEntry[Int] =
+    buildConf("meta.port")
+      .doc("Cassandra native connection port.")
+      .intConf
+      .createWithDefault(9042)
+
+  val META_USERNAME: ConfigEntry[String] =
+    buildConf("meta.username")
+      .doc(
+        """
+          |Cassandra username, default is `cassandra`.
+        """.stripMargin)
+      .stringConf
+      .createWithDefault("cassandra")
+
+  val META_PASSWORD: ConfigEntry[String] =
+    buildConf("meta.password")
+      .doc(
+        """
+          |Cassandra password, default is `cassandra`.
+        """.stripMargin)
+      .stringConf
+      .createWithDefault("cassandra")
+
+  val META_CONNECT_FACTORY: ConfigEntry[String] =
+    buildConf("meta.connect.factory")
+      .doc(
+        """
+          |CassandraConnectionFactory providing connections to the Cassandra cluster.
+        """.stripMargin)
+      .stringConf
+      .createWithDefault("com.engineplus.star.meta.CustomConnectionFactory")
+
+  val META_MAX_CONNECT_PER_EXECUTOR: ConfigEntry[Int] =
+    buildConf("meta.connections_per_executor_max")
+      .doc(
+        """
+          |Maximum number of connections per Host set on each Executor JVM. Will be
+          |updated to DefaultParallelism / Executors for Spark Commands. Defaults to 1
+          | if not specifying and not in a Spark Env.
+        """.stripMargin)
+      .intConf
+      .createWithDefault(600)
+
+  val META_GET_LOCK_MAX_ATTEMPTS: ConfigEntry[Int] =
+    buildConf("meta.get.lock.max.attempts")
+      .doc(
+        """
+          |The maximum times for a commit attempts to acquire the partition write lock.
+        """.stripMargin)
+      .intConf
+      .createWithDefault(5)
+
+  val META_GET_LOCK_WAIT_INTERVAL: ConfigEntry[Int] =
+    buildConf("meta.acquire.write.lock.wait.interval")
+      .doc(
+        """
+          |The wait time when a commit failed to get write lock because another job is committing.
+        """.stripMargin)
+      .intConf
+      .createWithDefault(5)
+
+  val META_GET_LOCK_RETRY_INTERVAL: ConfigEntry[Int] =
+    buildConf("meta.acquire.write.lock.retry.interval")
+      .doc(
+        """
+          |The interval time when a commit failed to get write lock.
+          |The commit will wait a random time between 0 and RETRY_INTERVAL seconds.
+        """.stripMargin)
+      .intConf
+      .createWithDefault(20)
+
+  val META_COMMIT_TIMEOUT: ConfigEntry[Long] =
+    buildConf("meta.commit.timeout")
+      .doc(
+        """
+          |The maximum timeout for a committer.
+        """.stripMargin)
+      .longConf
+      .createWithDefault(20 * 1000L)
+
+  val META_UNDO_LOG_TIMEOUT: ConfigEntry[Long] =
+    buildConf("meta.undo_log.timeout")
+      .doc(
+        """
+          |The maximum timeout for undo log(exclude Commit type).
+          |This parameter will only be used in Cleanup operation.
+        """.stripMargin)
+      .longConf
+      .createWithDefault(30 * 60 * 1000L)
+
+  val META_STREAMING_INFO_TIMEOUT: ConfigEntry[Long] =
+    buildConf("meta.streaming_info.timeout")
+      .doc(
+        """
+          |The maximum timeout for streaming info.
+          |This parameter will only be used in Cleanup operation.
+        """.stripMargin)
+      .longConf
+      .createWithDefault(12 * 60 * 60 * 1000L)
+
+  val META_MAX_COMMIT_ATTEMPTS: ConfigEntry[Int] =
+    buildConf("meta.commit.max.attempts")
+      .doc(
+        """
+          |The maximum times for a job attempts to commit.
+        """.stripMargin)
+      .intConf
+      .createWithDefault(5)
+
+  val META_MAX_SIZE_PER_VALUE: ConfigEntry[Int] =
+    buildConf("meta.max.size.per.value")
+      .doc(
+        """
+          |The maximum size for undo log value(e.g. table_info.table_schema).
+          |If value size exceed this limit, it will be split into some fragment values.
+        """.stripMargin)
+      .intConf
+      .createWithDefault(50 * 1024)
+
+  //dorp table await time
+  val DROP_TABLE_WAIT_SECONDS: ConfigEntry[Int] =
+    buildConf("drop.table.wait.seconds")
+      .doc(
+        """
+          |When dropping table or partition, we need wait a few seconds for the other commits to be completed.
+        """.stripMargin)
+      .intConf
+      .createWithDefault(1)
+
+  val ALLOW_FULL_TABLE_UPSERT: ConfigEntry[Boolean] =
+    buildConf("full.partitioned.table.scan.enabled")
+      .doc("If true, enables full table scan when upsert.")
+      .booleanConf
+      .createWithDefault(false)
+
+  val PARQUET_BLOCK_SIZE: ConfigEntry[Long] =
+    buildConf("parquet.block.size")
+      .doc("Parquet block size.")
+      .longConf
+      .createWithDefault(32 * 1024 * 1024L)
+
+
+  val PARQUET_COMPRESSION: ConfigEntry[String] =
+    buildConf("parquet.compression")
+      .doc(
+        """
+          |Parquet compression type.
+        """.stripMargin)
+      .stringConf
+      .createWithDefault("snappy")
+
+  val USE_PARQUET_COMPRESSION: ConfigEntry[Boolean] =
+    buildConf("use.parquet.compression")
+      .doc(
+        """
+          |Whether to use parquet compression.
+        """.stripMargin)
+      .booleanConf
+      .createWithDefault(true)
+
+
+}
