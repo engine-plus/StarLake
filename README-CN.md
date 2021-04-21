@@ -37,6 +37,7 @@ Star Lake 的适用场景：
 ![performance comparison](doc/performance_comparison.png)
 
 # 在你的 Spark 项目中引入依赖
+需要使用 Scala 2.12 来支持 Star Lake。
 ```xml
 <dependency>
     <groupId>com.engineplus</groupId>
@@ -136,7 +137,7 @@ val df2 = StarTable.forPath(tablePath).toDF
 
 默认情况下使用 MergeOnRead 模式，upsert 数据以 delta file 的形式写入表路径，Star Lake 提供了高效的 upsert 和 merge scan 性能。  
 
-可以通过设置参数 spark.engineplus.star.deltaFile.enabled 为 false 开启 CopyOnWrite 模式，每次 upsert 都生成最终合并数据，但不建议这么做，因为写效率很差且并发度较低。
+可以通过设置参数 `spark.engineplus.star.deltaFile.enabled` 为 `false` 开启 CopyOnWrite 模式，每次 upsert 都生成最终合并数据，但不建议这么做，因为写效率很差且并发度较低。
 
 #### 3.1.1 代码示例
 ```scala
@@ -163,7 +164,7 @@ starTable.upsert(extraDF)
 若未使用 hash 分区，则允许存在重复数据。  
 
 ## 4. Update StarTable
-Star Lake 支持 update 操作，通过指定条件和需要更新的字段 expression 来执行。有多种方式可以执行 update，详见 com.engineplus.star.tables.StarTable 注释。
+Star Lake 支持 update 操作，通过指定条件和需要更新的字段 expression 来执行。有多种方式可以执行 update，详见 `com.engineplus.star.tables.StarTable` 注释。
 
 ### 4.1 代码示例
 ```scala
@@ -210,8 +211,8 @@ starTable.delete()
 当执行全表 compaction 时，可以给 compaction 设置条件，只有符合条件的 range 分区才会执行 compaction 操作。  
 
 触发 compaction 的条件：
-1. range 分区最后一次修改时间在设置的 spark.engineplus.star.compaction.interval (ms) 之前，默认是 12 小时
-2. range 分区 upsert 产生的 delta file num 超过了设置的 spark.engineplus.star.deltaFile.max.num，默认是 5
+1. range 分区最后一次修改时间在设置的 `spark.engineplus.star.compaction.interval` (ms) 之前，默认是 12 小时
+2. range 分区 upsert 产生的 delta file num 超过了设置的 `spark.engineplus.star.deltaFile.max.num`，默认是 5
 
 ### 6.1 代码示例
 ```scala
@@ -239,9 +240,9 @@ Cleanup 功能用来清理 StarTable 中无效的数据文件和 meta 信息。
 
 StarTable 的 update、delete、upsert、compaction 等操作不会真正删除存储上的数据文件，如果想清理已失效的文件，可以执行 cleanup 操作。  
 
-默认情况下，会清理最后修改时间在 5 小时之前的数据，可以通过设置 spark.engineplus.star.cleanup.interval 来修改这个时间。  
+默认情况下，会清理最后修改时间在 5 小时之前的数据，可以通过设置 `spark.engineplus.star.cleanup.interval` 来修改这个时间。  
 
-参数 spark.engineplus.star.cleanup.parallelism 用来控制 list 文件的并行度，默认为 50，如果表分区和文件过多，可以适当调大。
+参数 `spark.engineplus.star.cleanup.parallelism` 用来控制 list 文件的并行度，默认为 50，如果表分区和文件过多，可以适当调大。
 
 ### 7.1 代码示例
 ```scala
@@ -259,11 +260,11 @@ starTable.cleanup()
 ```
 
 ## 8. 使用 Spark SQL 操作 StarTable
-Star Lake 支持 Spark SQL 读写数据，使用时需要设置 spark.sql.catalog.spark_catalog 为 StarLakeCatalog。  
+Star Lake 支持 Spark SQL 读写数据，使用时需要设置 `spark.sql.catalog.spark_catalog` 为 `org.apache.spark.sql.star.catalog.StarLakeCatalog`。  
 需要注意的是：
-  - insert into 语句会默认开启 autoMerge 功能；
+  - insert into 语句会默认开启 `autoMerge` 功能；
   - 建表语句中指定的分区为 range 分区，暂不支持通过 Spark SQL 在建表时设置 hash 分区；
-  - StarTable 暂不支持部分 Spark SQL 语句，详见 org.apache.spark.sql.star.rules.StarLakeUnsupportedOperationsCheck；
+  - StarTable 暂不支持部分 Spark SQL 语句，详见 `org.apache.spark.sql.star.rules.StarLakeUnsupportedOperationsCheck`；
 
 ### 8.1 代码示例
 ```scala
@@ -304,7 +305,7 @@ Star Lake 目前支持 join、intersect 和 except 算子的优化，后续将�
   - 对同一张表不同分区的 hash 字段执行 intersect/except 时，无需 shuffle、sort 和 distinct
   - 对两张不同的表，若它们拥有相同的 hash 字段类型和字段数量且 hash bucket 数量相同，对 hash 字段执行 intersect/except 时，无需 shuffle、sort 和 distinct
 
-range 分区内，hash 主键字段值是唯一的，因此 intersect 或 except 的结果是不重复的，后续操作不需要再次去重，例如可以直接 count 获取不重复数据的数量，无需 count distinct。
+range 分区内，hash 主键字段值是唯一的，因此 intersect 或 except 的结果是不重复的，后续操作不需要再次去重，例如可以直接 `count` 获取不重复数据的数量，无需 `count distinct`。
 
 测试结果显示，优化后 intersect 和 except 算子的效率分别是 Iceberg 的3.9倍和3.6倍。 
 
@@ -389,7 +390,7 @@ spark.sql(
 Star Lake 支持 schema 演进功能，可以新增列 (分区字段无法修改)。新增列后，读取现有数据，该新增列会是 NULL。你可以通过使用 upsert 功能，为现有数据追加该新列。
 
 ### 10.1 Merge Schema
-在写数据时指定 mergeSchema 为 true，或者启用 autoMerge 来 merge schema，新的 schema 为表原本 schema 和当前写入数据 schema 的并集。  
+在写数据时指定 `mergeSchema` 为 `true`，或者启用 `autoMerge` 来 merge schema，新的 schema 为表原本 schema 和当前写入数据 schema 的并集。  
 
 ### 10.2 代码示例
 ```scala

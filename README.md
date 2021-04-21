@@ -1,3 +1,5 @@
+[CN Doc](README-CN.md)
+
 # Star Lake
 Star Lake is a data lake storage solution built on top of the Apache Spark engine by the EnginePlus team, that supports scalable metadata management, ACID transactions, efficient and flexible upsert operation, schema evolution, and streaming & batch unification.
 
@@ -27,11 +29,11 @@ Scenario of Star Lake:
 | Metadata Store | meta files on table path | meta files on table path | meta files on table path | **Cassandra** |
 | Metadata Scalability | low | low | low | **high** |
 | Read | partition pruning by meta files | partition pruning by meta files | metadata is richer and supports fine-grained pruning at file level | **partition pruning by meta data** |
-| Concurrent Write | support | only support one writer，optimistic concurrency is still in the experimental stage | support | **support, the unique upsert mechanism turns updates into append, greatly improved concurrent write performance** |
+| Concurrent Write | support | only support one writer, optimistic concurrency is still in the experimental stage | support | **support, the unique upsert mechanism turns updates into append, greatly improved concurrent write performance** |
 | Streaming and Batch Unification | support | don't support concurrent write | support | **support** |
-| Row Level Upsert | overwrite row-related files | support MergeOnRead，will be compacted at next snapshot | overwrite row-related files | **support MergeOnRead，only write the data to be updated** |
-| Column Level upsert | overwrite all files in partition | support MergeOnRead，will overwrite all files in the partition at next snapshot | overwrite all files in partition | **support MergeOnRead，can last any time until user executes compaction, and optimized merge scan provides efficient read performance** |
-| Bucket Join | nonsupport | nonsupport | nonsupport，bucket rules can be specified in partitioning spec, but there is no implementation yet | **support** |
+| Row Level Upsert | overwrite row-related files | support MergeOnRead, will be compacted at next snapshot | overwrite row-related files | **support MergeOnRead, only write the data to be updated** |
+| Column Level upsert | overwrite all files in partition | support MergeOnRead, will overwrite all files in the partition at next snapshot | overwrite all files in partition | **support MergeOnRead, can last any time until user executes compaction, and optimized merge scan provides efficient read performance** |
+| Bucket Join | nonsupport | nonsupport | nonsupport, bucket rules can be specified in partitioning spec, but there is no implementation yet | **support** |
 
 
 # Performance Comparison Between Star Lake and Iceberg
@@ -39,7 +41,9 @@ In above data Lake solutions, Delta Lake open source version exists to feed comm
 
 ![performance comparison](doc/performance_comparison.png)
 
-# Introduce Dependencies
+# Maven
+Star Lake is only available with Scala version 2.12.
+
 ```xml
 <dependency>
     <groupId>com.engineplus</groupId>
@@ -140,7 +144,7 @@ Upsert is supported when hash partitioning has been specified.
 
 MergeOnRead is used by default, upsert data is written as delta files. Star Lake provides efficient upsert and merge scan performance.
 
-Parameter spark.engineplus.star.deltaFile.enabled can be set to false to use CopyOnWrite mode, eventually merged data will be generated after upsert, but this mode is not recommended, because it has poor performance and low concurrent.
+Parameter `spark.engineplus.star.deltaFile.enabled` can be set to `false` to use CopyOnWrite mode, eventually merged data will be generated after upsert, but this mode is not recommended, because it has poor performance and low concurrent.
 
 #### 3.1.1 Code Examples
 ```scala
@@ -167,7 +171,7 @@ When outputMode is append or update, if hash partition is specified, each write 
 Duplicate data is allowed if no hash partitioning is used. 
 
 ## 4. Update StarTable
-Star Lake supports update operations, which are performed by specifying the condition and the field Expression that needs to be updated. There are several ways to perform update, see annotations in com.engineplus.star.tables.StarTable.
+Star Lake supports update operations, which are performed by specifying the condition and the field Expression that needs to be updated. There are several ways to perform update, see annotations in `com.engineplus.star.tables.StarTable`.
 
 ### 4.1 Code Examples
 ```scala
@@ -214,8 +218,8 @@ Upsert will generates delta files, which can affect read efficiency when delta f
 When compaction is performed to the full table, you can set conditions for compaction, only range partitions that meet the conditions will perform compaction.
 
 Conditions to trigger compaction:
-1. The last modification time for a range partition is before spark.engineplus.star.compaction.interval (ms), default is 12 hours
-2. Delta file num exceeds spark.engineplus.star.deltaFile.max.num, default is 5
+1. The last modification time for a range partition is before `spark.engineplus.star.compaction.interval` (ms), default is 12 hours
+2. Delta file num exceeds `spark.engineplus.star.deltaFile.max.num`, default is 5
 
 ### 6.1 Code Examples
 ```scala
@@ -243,9 +247,9 @@ Cleanup operation is used to clean useless data files and meta information in St
 
 Operations like update, delete, upsert, compaction are not actually delete the data files on the storage, if you want to cleanup the useless data, you can perform a Cleanup operation.
 
-By default, Cleanup operation will clean up the data which last modified time before 5 hours, you can set spark.engineplus.star.cleanup.interval to modify this time.
+By default, Cleanup operation will clean up the data which last modified time before 5 hours, you can set `spark.engineplus.star.cleanup.interval` to modify it.
 
-Parameter spark.engineplus.star.cleanup.parallelism is used to control the parallelism when listing files, default value is 50. If the table has to much partitions and files, you can appropriate adjust it.
+Parameter `spark.engineplus.star.cleanup.parallelism` is used to control the parallelism when listing files, default value is 50. If the table has to much partitions and files, you can appropriate adjust it.
 
 ### 7.1 Code Examples
 ```scala
@@ -263,12 +267,12 @@ starTable.cleanup()
 ```
 
 ## 8. Operate StarTable by Spark SQL 
-Spark SQL is supported to read and write StarTable. To use it, you need to set spark.sql.catalog.spark_catalog to StarLakeCatalog.
+Spark SQL is supported to read and write StarTable. To use it, you need to set `spark.sql.catalog.spark_catalog` to `org.apache.spark.sql.star.catalog.StarLakeCatalog`.
 
 Note:
-  - Insert into statement turns autoMerge on by default
+  - Insert into statement turns `autoMerge` on by default
   - Spark SQL does not support to set hash partition while creating a StarTable
-  - Some Spark SQL statements are not supported, see org.apache.spark.sql.star.rules.StarLakeUnsupportedOperationsCheck
+  - Some Spark SQL statements are not supported, see `org.apache.spark.sql.star.rules.StarLakeUnsupportedOperationsCheck`
 
 ### 8.1 Code Examples
 ```scala
