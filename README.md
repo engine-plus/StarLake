@@ -78,7 +78,7 @@ StarTable can be partitioned in two ways, range and hash, and they can be used a
 
 Depending on the specific scenario, you can choose to use a range partition, a hash partition, or both. When a hash partition is specified, the data in StarTable will be unique by the primary key, which is the hash partition field + range partition field (if any).
 
-StarTable supports upsert operation only if the hash partition is specified.
+When a hash partition is specified, StarTable supports upsert operations, where writing to data in APPEND mode is disabled, and the `starTable.upsert()` method can be used instead.
 
 ### 1.4 Code Examples
 ```scala
@@ -90,9 +90,11 @@ val spark = SparkSession.builder.master("local")
   .getOrCreate()
 import spark.implicits._
 
-//spark batch
 val df = Seq(("2021-01-01",1,"rice"),("2021-01-01",2,"bread")).toDF("date","id","name")
 val tablePath = "s3a://bucket-name/table/path/is/also/table/name"
+
+//create table
+//spark batch
 df.write
   .mode("append")
   .format("star")
@@ -100,7 +102,6 @@ df.write
   .option("hashPartitions","id")
   .option("hashBucketNum","2")
   .save(tablePath)
-
 //spark streaming
 import org.apache.spark.sql.streaming.Trigger
 val readStream = spark.readStream.parquet("inputPath")
@@ -114,6 +115,15 @@ val writeStream = readStream.writeStream
   .option("checkpointLocation", "s3a://bucket-name/checkpoint/path")
   .start(tablePath)
 writeStream.awaitTermination()
+
+//for existing table, it no longer need to specify partition information when writing data
+//equivalent to INSERT OVERWRITE PARTITION, if you do not specify option replaceWhere, the entire table will be overwritten
+df.write
+  .mode("overwrite")
+  .format("star")
+  .option("replaceWhere","date='2021-01-01'")
+  .save(tablePath)
+
 ```
 
 ## 2. Read StarTable
@@ -272,6 +282,7 @@ Spark SQL is supported to read and write StarTable. To use it, you need to set `
 Note:
   - Insert into statement turns `autoMerge` on by default
   - Spark SQL does not support to set hash partition while creating a StarTable
+  - Cannot perform INSERT INTO on a hash partitioned table, use `starTable.upsert()` instead
   - Some Spark SQL statements are not supported, see `org.apache.spark.sql.star.rules.StarLakeUnsupportedOperationsCheck`
 
 ### 8.1 Code Examples
@@ -288,7 +299,9 @@ val tablePath = "s3a://bucket-name/table/path/is/also/table/name"
 spark.range(10).createOrReplaceTempView("tmpView")
 
 //write
-spark.sql(s"insert into table star.`$tablePath` select * from tmpView")
+spark.sql(s"insert overwrite table star.`$tablePath` partition (date='2021-01-01') select id from tmpView") 
+//INSERT INTO cannot be used on a hash partitioned table, use `starTable.upsert()` instead
+spark.sql(s"insert into star.`$tablePath` select * from tmpView")
 
 //read
 spark.sql(s"select * from star.`$tablePath`").show()

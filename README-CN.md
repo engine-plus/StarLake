@@ -71,7 +71,7 @@ StarTable 有两种分区方式，分别是 range 分区和 hash 分区，可以
 
 可以根据具体场景选择使用 range 分区或 hash 分区，或者同时使用两者。当指定 hash 分区后，StarTable 的数据将根据主键唯一，主键字段为 hash 分区字段 + range 分区字段（如果存在）。
 
-只有指定了 hash 分区，StarTable 才支持 upsert 操作。
+当指定 hash 分区时，StarTable 支持 upsert 操作，此时 append 模式写数据被禁止，可以使用 `StarTable.upsert()` 方法来代替。
 
 ### 1.4 代码示例
 ```scala
@@ -83,9 +83,11 @@ val spark = SparkSession.builder.master("local")
   .getOrCreate()
 import spark.implicits._
 
-//spark batch
 val df = Seq(("2021-01-01",1,"rice"),("2021-01-01",2,"bread")).toDF("date","id","name")
 val tablePath = "s3a://bucket-name/table/path/is/also/table/name"
+
+//create table
+//spark batch
 df.write
   .mode("append")
   .format("star")
@@ -93,7 +95,6 @@ df.write
   .option("hashPartitions","id")
   .option("hashBucketNum","2")
   .save(tablePath)
-
 //spark streaming
 import org.apache.spark.sql.streaming.Trigger
 val readStream = spark.readStream.parquet("inputPath")
@@ -107,6 +108,15 @@ val writeStream = readStream.writeStream
   .option("checkpointLocation", "s3a://bucket-name/checkpoint/path")
   .start(tablePath)
 writeStream.awaitTermination()
+
+//对于已存在的表，写数据时不需要再指定分区信息
+//相当于 insert overwrite partition，如果不指定 replaceWhere，则会重写整张表
+df.write
+  .mode("overwrite")
+  .format("star")
+  .option("replaceWhere","date='2021-01-01'")
+  .save(tablePath)
+
 ```
 
 ## 2. Read StarTable
@@ -264,6 +274,7 @@ Star Lake 支持 Spark SQL 读写数据，使用时需要设置 `spark.sql.catal
 需要注意的是：
   - insert into 语句会默认开启 `autoMerge` 功能；
   - 建表语句中指定的分区为 range 分区，暂不支持通过 Spark SQL 在建表时设置 hash 分区；
+  - 不能对 hash 分区的表执行 `insert into` 功能，请使用 `StarTable.upsert()` 方法；
   - StarTable 暂不支持部分 Spark SQL 语句，详见 `org.apache.spark.sql.star.rules.StarLakeUnsupportedOperationsCheck`；
 
 ### 8.1 代码示例
@@ -280,7 +291,9 @@ val tablePath = "s3a://bucket-name/table/path/is/also/table/name"
 spark.range(10).createOrReplaceTempView("tmpView")
 
 //写数据
-spark.sql(s"insert into table star.`$tablePath` select * from tmpView")
+spark.sql(s"insert overwrite table star.`$tablePath` partition (date='2021-01-01') select id from tmpView") 
+//insert into 不能对 hash 分区表使用，请使用 StarTable.upsert() 方法
+spark.sql(s"insert into star.`$tablePath` select * from tmpView")
 
 //读数据
 spark.sql(s"select * from star.`$tablePath`").show()
