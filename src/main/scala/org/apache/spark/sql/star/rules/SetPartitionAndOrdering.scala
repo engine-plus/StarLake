@@ -23,7 +23,7 @@ import org.apache.spark.sql.catalyst.planning.PhysicalOperation
 import org.apache.spark.sql.catalyst.plans.logical.LogicalPlan
 import org.apache.spark.sql.catalyst.plans.physical.{HashPartitioning, Partitioning}
 import org.apache.spark.sql.execution._
-import org.apache.spark.sql.execution.datasources.v2.merge.OnePartitionMergeScan
+import org.apache.spark.sql.execution.datasources.v2.merge.{MultiPartitionMergeBucketScan, OnePartitionMergeBucketScan}
 import org.apache.spark.sql.execution.datasources.v2.parquet.BucketParquetScan
 import org.apache.spark.sql.execution.datasources.v2.{BatchScanExec, DataSourceV2ScanRelation}
 import org.apache.spark.sql.star.catalog.StarLakeTableV2
@@ -52,7 +52,7 @@ case class SetPartitionAndOrdering(session: SparkSession)
   override def apply(plan: LogicalPlan): Seq[SparkPlan] = plan match {
 
     case PhysicalOperation(project, filters,
-    relation@DataSourceV2ScanRelation(tbl: StarLakeTableV2, bucketScan: BucketParquetScan, output)) =>
+    relation @ DataSourceV2ScanRelation(tbl: StarLakeTableV2, bucketScan: BucketParquetScan, output)) =>
       // projection and filters were already pushed down in the optimizer.
       // this uses PhysicalOperation to get the projection and ensure that if the batch scan does
       // not support columnar, a projection is added to convert the rows to UnsafeRow.
@@ -67,9 +67,9 @@ case class SetPartitionAndOrdering(session: SparkSession)
       withPartitionAndOrdering(outputPartitioning, outputOrdering, child) :: Nil
 
     case PhysicalOperation(project, filters,
-    relation@DataSourceV2ScanRelation(
+    relation @ DataSourceV2ScanRelation(
     tbl: StarLakeTableV2,
-    mergeScan@OnePartitionMergeScan(_, _, _, _, _, _, _, options: CaseInsensitiveStringMap, _, _, _),
+    mergeScan @ OnePartitionMergeBucketScan(_, _, _, _, _, _, _, options: CaseInsensitiveStringMap, _, _, _),
     output)) =>
       // projection and filters were already pushed down in the optimizer.
       // this uses PhysicalOperation to get the projection and ensure that if the batch scan does
@@ -102,11 +102,37 @@ case class SetPartitionAndOrdering(session: SparkSession)
 
       withPartitionAndOrdering(outputPartitioning, outputOrdering, child) :: Nil
 
+    case PhysicalOperation(project, filters,
+    relation @ DataSourceV2ScanRelation(
+    tbl: StarLakeTableV2,
+    mergeScan @ MultiPartitionMergeBucketScan(_, _, _, _, _, _, _, options: CaseInsensitiveStringMap, _, _, _),
+    output)) =>
+      // projection and filters were already pushed down in the optimizer.
+      // this uses PhysicalOperation to get the projection and ensure that if the batch scan does
+      // not support columnar, a projection is added to convert the rows to UnsafeRow.
+      val tableInfo = mergeScan.tableInfo
+      val hashKeys = tableInfo.hash_partition_columns.flatMap(key => output.find(_.name == key))
+      val bucketNum = tableInfo.bucket_num
+      val outputPartitioning = HashPartitioning(hashKeys, bucketNum)
+
+      val batchExec = BatchScanExec(relation.output, relation.scan)
+      val child = withProjectAndFilter(project, filters, batchExec, !batchExec.supportsColumnar)
+      withPartition(outputPartitioning, child) :: Nil
+
     case _ => Nil
   }
 
 }
 
+case class withPartition(partition: Partitioning,
+                         child: SparkPlan) extends UnaryExecNode {
+  override def output: Seq[Attribute] = child.output
+
+  override def doExecute(): RDD[InternalRow] = child.execute()
+
+  override def outputPartitioning: Partitioning = partition
+
+}
 
 case class withPartitionAndOrdering(partition: Partitioning,
                                     ordering: Seq[SortOrder],

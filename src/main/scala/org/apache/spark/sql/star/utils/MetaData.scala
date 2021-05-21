@@ -111,7 +111,7 @@ case class DataFileInfo(file_path: String,
   //identify for merge read
   lazy val range_version: String = range_key + "-" + write_version.toString
 
-  lazy val file_group_id: Int = BucketingUtils
+  lazy val file_bucket_id: Int = BucketingUtils
     .getBucketId(new Path(file_path).getName)
     .getOrElse(sys.error(s"Invalid bucket file $file_path"))
 

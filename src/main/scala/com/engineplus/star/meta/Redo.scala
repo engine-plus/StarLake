@@ -69,7 +69,7 @@ object Redo extends Logging{
   private def redoAddedFile(table_id: String, commit_id: String): Unit = {
     val add_file_undo_arr = getUndoLogInfo(UndoLogType.AddFile.toString, table_id, commit_id)
     for (add_file_undo <- add_file_undo_arr) {
-      DataOperation.redoAddNewDataFile(add_file_undo)
+      DataOperation.redoAddedNewDataFile(add_file_undo)
     }
     deleteUndoLogByCommitId(UndoLogType.AddFile.toString, table_id, commit_id)
   }
@@ -86,7 +86,8 @@ object Redo extends Logging{
     val streaming_undo_arr = getUndoLogInfo(UndoLogType.Commit.toString, table_id, commit_id)
 
     for (streaming_undo <- streaming_undo_arr) {
-      if (streaming_undo.query_id.nonEmpty
+      if (streaming_undo.query_id != null
+        && streaming_undo.query_id.nonEmpty
         && !streaming_undo.query_id.equals(MetaUtils.UNDO_LOG_DEFAULT_VALUE)
         && streaming_undo.batch_id >= 0) {
 

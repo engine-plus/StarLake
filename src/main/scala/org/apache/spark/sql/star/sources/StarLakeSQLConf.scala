@@ -237,14 +237,25 @@ object StarLakeSQLConf {
       .stringConf
       .createWithDefault("snappy")
 
-  val USE_PARQUET_COMPRESSION: ConfigEntry[Boolean] =
-    buildConf("use.parquet.compression")
+  val PARQUET_COMPRESSION_ENABLE: ConfigEntry[Boolean] =
+    buildConf("parquet.compression.enable")
       .doc(
         """
           |Whether to use parquet compression.
         """.stripMargin)
       .booleanConf
       .createWithDefault(true)
+
+  val BUCKET_SCAN_MULTI_PARTITION_ENABLE: ConfigEntry[Boolean] =
+    buildConf("bucket.scan.multi.partition.enable")
+      .doc(
+        """
+          |Hash partitioned table can read multi-partition data partitioned by hash keys without shuffle,
+          |this parameter controls whether this feature is enabled or not.
+          |Using this feature, the parallelism will equal to hash bucket num.
+        """.stripMargin)
+      .booleanConf
+      .createWithDefault(false)
 
 
 }

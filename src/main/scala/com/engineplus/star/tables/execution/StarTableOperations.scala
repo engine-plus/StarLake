@@ -29,7 +29,7 @@ import org.apache.spark.sql.star.utils.AnalysisHelper
 import org.apache.spark.sql.types.{StructField, StructType}
 import org.apache.spark.sql.{Column, DataFrame, SparkSession, functions}
 
-import scala.collection.{Map, mutable}
+import scala.collection.mutable
 
 trait StarTableOperations extends AnalysisHelper {
   self: StarTable =>
@@ -101,21 +101,26 @@ trait StarTableOperations extends AnalysisHelper {
   protected def executeCompaction(df: DataFrame,
                                   snapshotManagement: SnapshotManagement,
                                   condition: String,
-                                  force: Boolean = true): Unit = {
+                                  force: Boolean = true,
+                                  mergeOperatorInfo: Map[String, String]): Unit = {
     condition match {
-      case "" => CompactionCommand(snapshotManagement, None, force).run(sparkSession)
-      case _ => CompactionCommand(snapshotManagement, Option(expr(condition).expr), force).run(sparkSession)
+      case "" => CompactionCommand(
+        snapshotManagement,
+        None,
+        force,
+        mergeOperatorInfo).run(sparkSession)
+      case _ => CompactionCommand(
+        snapshotManagement,
+        Option(expr(condition).expr),
+        force,
+        mergeOperatorInfo).run(sparkSession)
     }
   }
 
 
   protected def executeCleanup(snapshotManagement: SnapshotManagement,
                                justList: Boolean): Unit = {
-
-    val deleteFiles = CleanupCommand.runCleanup(sparkSession, snapshotManagement, justList)
-    deleteFiles.persist()
-    print("========== deleteFilesNum: " + deleteFiles.count())
-    deleteFiles.show(false)
+    CleanupCommand.runCleanup(sparkSession, snapshotManagement, justList)
   }
 
   protected def executeDropTable(snapshotManagement: SnapshotManagement): Unit = {

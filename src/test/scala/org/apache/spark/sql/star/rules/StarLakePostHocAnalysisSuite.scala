@@ -39,8 +39,8 @@ class StarLakePostHocAnalysisSuite extends QueryTest with SharedSparkSession wit
           .save(tableName)
 
 
-        val df1 = data.filter("range='range1'").select("hash")
-        val df2 = data.filter("range='range2'").select("hash")
+        val df1 = data.filter("range='range1'").select("hash").distinct()
+        val df2 = data.filter("range='range2'").select("hash").distinct()
         val intersectDF1 = if (op.equals("intersect")) {
           df1.intersect(df2)
         } else {

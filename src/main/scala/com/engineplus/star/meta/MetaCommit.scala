@@ -549,6 +549,7 @@ object MetaCommit extends Logging{
       other_log_info_seq
         .map(_.commit_id).toSet
         .filter(hasCommitTypeLog(table_id, _))
+
     other_log_info_seq
       .filter(log => !skip_commit_id.contains(log.commit_id))
       .foreach(log => {

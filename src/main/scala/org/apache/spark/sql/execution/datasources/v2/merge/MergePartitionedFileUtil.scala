@@ -63,9 +63,6 @@ object MergePartitionedFileUtil {
       .getOrElse(throw StarLakeErrors.filePathNotFoundException(filePathStr, fileInfo.mkString(",")))
 
     val touchedFileSchema = requestFilesSchemaMap(touchedFileInfo.range_version).fieldNames
-    val mergeKey = tableInfo.hash_partition_columns.map(f => {
-      (f, touchedFileSchema.indexOf(f))
-    }).toMap
 
     val keyInfo = tableInfo.hash_partition_schema.map(f => {
       (touchedFileSchema.indexOf(f.name), f.dataType)
@@ -83,11 +80,10 @@ object MergePartitionedFileUtil {
       rangeKey = touchedFileInfo.range_key,
       keyInfo = keyInfo,
       resultSchema = requestDataInfo ++ partitionSchemaInfo,
-      fileSchema = touchedFileSchema ++ requestPartitionFields,
       fileInfo = fileSchemaInfo ++ partitionSchemaInfo,
       writeVersion = touchedFileInfo.write_version,
       rangeVersion = touchedFileInfo.range_version,
-      fileGroupId = touchedFileInfo.file_group_id,
+      fileBucketId = touchedFileInfo.file_bucket_id,
       locations = hosts)
   }
 

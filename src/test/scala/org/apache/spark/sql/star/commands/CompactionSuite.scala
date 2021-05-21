@@ -18,7 +18,7 @@ package org.apache.spark.sql.star.commands
 
 import com.engineplus.star.tables.StarTable
 import org.apache.spark.sql.star.SnapshotManagement
-import org.apache.spark.sql.star.test.StarLakeTestUtils
+import org.apache.spark.sql.star.test.{MergeOpInt, MergeOpString, StarLakeTestUtils}
 import org.apache.spark.sql.test.SharedSparkSession
 import org.apache.spark.sql.{AnalysisException, QueryTest}
 import org.scalatest.BeforeAndAfterEach
@@ -60,7 +60,7 @@ class CompactionSuite extends QueryTest
 
       val sm = SnapshotManagement(tableName)
       var rangeGroup = sm.snapshot.allDataInfo.groupBy(_.range_partitions)
-      assert(rangeGroup.forall(_._2.groupBy(_.file_group_id).forall(_._2.length == 1)))
+      assert(rangeGroup.forall(_._2.groupBy(_.file_bucket_id).forall(_._2.length == 1)))
 
 
       val df2 = Seq((1, 1, 1), (2, 1, 1), (3, 1, 1), (1, 2, 2), (1, 3, 3))
@@ -71,12 +71,12 @@ class CompactionSuite extends QueryTest
       }
 
       rangeGroup = sm.updateSnapshot().allDataInfo.groupBy(_.range_partitions)
-      assert(!rangeGroup.forall(_._2.groupBy(_.file_group_id).forall(_._2.length == 1)))
+      assert(!rangeGroup.forall(_._2.groupBy(_.file_bucket_id).forall(_._2.length == 1)))
 
 
       StarTable.forPath(tableName).compaction(true)
       rangeGroup = sm.updateSnapshot().allDataInfo.groupBy(_.range_partitions)
-      assert(rangeGroup.forall(_._2.groupBy(_.file_group_id).forall(_._2.length == 1)))
+      assert(rangeGroup.forall(_._2.groupBy(_.file_bucket_id).forall(_._2.length == 1)))
 
     })
   }
@@ -106,19 +106,19 @@ class CompactionSuite extends QueryTest
       val rangeInfo = sm.snapshot.allDataInfo
         .filter(_.range_key.equals("range=1"))
 
-      assert(!rangeInfo.groupBy(_.file_group_id).forall(_._2.length == 1))
+      assert(!rangeInfo.groupBy(_.file_bucket_id).forall(_._2.length == 1))
 
 
       StarTable.forPath(tableName).compaction("range=1")
 
       assert(sm.updateSnapshot().allDataInfo
         .filter(_.range_key.equals("range=1"))
-        .groupBy(_.file_group_id).forall(_._2.length == 1)
+        .groupBy(_.file_bucket_id).forall(_._2.length == 1)
       )
 
       assert(sm.updateSnapshot().allDataInfo
         .filter(!_.range_key.equals("range=1"))
-        .groupBy(_.file_group_id).forall(_._2.length != 1)
+        .groupBy(_.file_bucket_id).forall(_._2.length != 1)
       )
 
     })
@@ -242,4 +242,67 @@ class CompactionSuite extends QueryTest
   }
 
 
+  test("simple compaction with merge operator") {
+    withTempDir(file => {
+      val tableName = file.getCanonicalPath
+
+      val df1 = Seq((1, 1, 1, "1"), (2, 1, 1, "1"), (3, 1, 1, "1"), (1, 2, 2, "2"), (1, 3, 3, "3"))
+        .toDF("range", "hash", "v1", "v2")
+      df1.write
+        .option("rangePartitions", "range")
+        .option("hashPartitions", "hash")
+        .option("hashBucketNum", "2")
+        .format("star")
+        .save(tableName)
+
+
+      val df2 = Seq((1, 1, 1, "1"), (2, 1, 1, "1"), (3, 1, 1, "1"), (1, 2, 2, "2"), (1, 3, 3, "3"))
+        .toDF("range", "hash", "v1", "v2")
+
+      val table = StarTable.forPath(tableName)
+      table.upsert(df2)
+
+      val result = Seq((1, 1, 2, "1,1"), (2, 1, 2, "1,1"), (3, 1, 2, "1,1"), (1, 2, 4, "2,2"), (1, 3, 6, "3,3"))
+        .toDF("range", "hash", "v1", "v2")
+
+      val mergeOperatorInfo = Map("v1" -> new MergeOpInt(), "v2" -> new MergeOpString())
+      table.compaction(true, mergeOperatorInfo)
+      checkAnswer(table.toDF.select("range", "hash", "v1", "v2"), result)
+
+    })
+  }
+
+
+  test("compaction with merge operator should failed if merge operator illegal") {
+    withTempDir(file => {
+      val tableName = file.getCanonicalPath
+
+      val df1 = Seq((1, 1, 1), (2, 1, 1), (3, 1, 1), (1, 2, 2), (1, 3, 3))
+        .toDF("range", "hash", "value")
+      df1.write
+        .option("rangePartitions", "range")
+        .option("hashPartitions", "hash")
+        .option("hashBucketNum", "2")
+        .format("star")
+        .save(tableName)
+
+      val table = StarTable.forPath(tableName)
+
+      val e1 = intercept[AnalysisException] {
+        class tmp {}
+        val mergeOperatorInfo = Map("value" -> new tmp())
+        table.compaction(true, mergeOperatorInfo)
+      }
+      assert(e1.getMessage().contains("is not a legal merge operator class"))
+      val e2 = intercept[AnalysisException] {
+        val mergeOperatorInfo = Map("value" -> "a")
+        table.compaction(true, mergeOperatorInfo)
+      }
+      assert(e2.getMessage().contains("is not a legal merge operator class"))
+
+    })
+  }
+
+
 }
+

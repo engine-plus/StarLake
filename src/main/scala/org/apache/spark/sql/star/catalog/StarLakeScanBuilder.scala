@@ -24,11 +24,11 @@ import org.apache.spark.sql.catalyst.expressions.Expression
 import org.apache.spark.sql.connector.read.{Scan, SupportsPushDownFilters}
 import org.apache.spark.sql.execution.datasources.parquet.{ParquetFilters, SparkToParquetSchemaConverter}
 import org.apache.spark.sql.execution.datasources.v2.FileScanBuilder
-import org.apache.spark.sql.execution.datasources.v2.merge.{MultiPartitionMergeScan, OnePartitionMergeScan}
+import org.apache.spark.sql.execution.datasources.v2.merge.{MultiPartitionMergeBucketScan, MultiPartitionMergeScan, OnePartitionMergeBucketScan}
 import org.apache.spark.sql.execution.datasources.v2.parquet.{BucketParquetScan, ParquetScan}
 import org.apache.spark.sql.sources.Filter
-import org.apache.spark.sql.star.StarLakeFileIndexV2
-import org.apache.spark.sql.star.sources.StarLakeSourceUtils
+import org.apache.spark.sql.star.{StarLakeFileIndexV2, StarLakeUtils}
+import org.apache.spark.sql.star.sources.{StarLakeSQLConf, StarLakeSourceUtils}
 import org.apache.spark.sql.star.utils.TableInfo
 import org.apache.spark.sql.types.StructType
 import org.apache.spark.sql.util.CaseInsensitiveStringMap
@@ -45,6 +45,7 @@ case class StarLakeScanBuilder(sparkSession: SparkSession,
   extends FileScanBuilder(sparkSession, fileIndex, dataSchema) with SupportsPushDownFilters with Logging {
   lazy val hadoopConf = {
     val caseSensitiveMap = options.asCaseSensitiveMap.asScala.toMap
+      .filter(!_._1.startsWith(StarLakeUtils.MERGE_OP_COL))
     // Hadoop Configurations are case sensitive.
     sparkSession.sessionState.newHadoopConfWithOptions(caseSensitiveMap)
   }
@@ -87,6 +88,7 @@ case class StarLakeScanBuilder(sparkSession: SparkSession,
   // All filters that can be converted to Parquet are pushed down.
   override def pushedFilters: Array[Filter] = pushedParquetFilters
 
+  //note: hash partition columns must be first
   def mergeReadDataSchema(): StructType = {
     StructType((tableInfo.hash_partition_schema ++ readDataSchema()).distinct)
   }
@@ -109,12 +111,16 @@ case class StarLakeScanBuilder(sparkSession: SparkSession,
         BucketParquetScan(sparkSession, hadoopConf, fileIndex, dataSchema, readDataSchema(),
           readPartitionSchema(), pushedParquetFilters, options, tableInfo, Seq(parseFilter()))
       } else {
-        OnePartitionMergeScan(sparkSession, hadoopConf, fileIndex, dataSchema, mergeReadDataSchema(),
+        OnePartitionMergeBucketScan(sparkSession, hadoopConf, fileIndex, dataSchema, mergeReadDataSchema(),
           readPartitionSchema(), pushedParquetFilters, options, tableInfo, Seq(parseFilter()))
       }
     }
     else {
-      if (hasNoDeltaFile) {
+      if (sparkSession.sessionState.conf
+        .getConf(StarLakeSQLConf.BUCKET_SCAN_MULTI_PARTITION_ENABLE)) {
+        MultiPartitionMergeBucketScan(sparkSession, hadoopConf, fileIndex, dataSchema, mergeReadDataSchema(),
+          readPartitionSchema(), pushedParquetFilters, options, tableInfo, Seq(parseFilter()))
+      } else if (hasNoDeltaFile) {
         parquetScan(canUseAsyncReader)
       } else {
         MultiPartitionMergeScan(sparkSession, hadoopConf, fileIndex, dataSchema, mergeReadDataSchema(),

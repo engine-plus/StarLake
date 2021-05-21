@@ -34,7 +34,8 @@ import scala.collection.JavaConversions._
 
 case class CompactionCommand(snapshotManagement: SnapshotManagement,
                              condition: Option[Expression],
-                             force: Boolean)
+                             force: Boolean,
+                             mergeOperatorInfo: Map[String, String])
   extends PredicateHelper with Logging{
 
 
@@ -70,7 +71,8 @@ case class CompactionCommand(snapshotManagement: SnapshotManagement,
       new Path(snapshotManagement.table_name),
       None,
       None,
-      Option(fileIndex)
+      Option(fileIndex),
+      mergeOperatorInfo
     )
     val option = new CaseInsensitiveStringMap(
       Map("basePath" -> tc.tableInfo.table_name, "isCompaction" -> "true"))
@@ -121,7 +123,7 @@ case class CompactionCommand(snapshotManagement: SnapshotManagement,
         lazy val hasNoDeltaFile = if (force) {
           false
         } else {
-          files.groupBy(_.file_group_id).forall(_._2.size == 1)
+          files.groupBy(_.file_bucket_id).forall(_._2.size == 1)
         }
 
         if (partitionInfo.be_compacted || hasNoDeltaFile) {
@@ -143,7 +145,7 @@ case class CompactionCommand(snapshotManagement: SnapshotManagement,
           val hasNoDeltaFile = if (force) {
             false
           } else {
-            files.groupBy(_.file_group_id).forall(_._2.size == 1)
+            files.groupBy(_.file_bucket_id).forall(_._2.size == 1)
           }
           if (hasNoDeltaFile) {
             logInfo(s"== Partition ${part.range_value} has no delta file.")

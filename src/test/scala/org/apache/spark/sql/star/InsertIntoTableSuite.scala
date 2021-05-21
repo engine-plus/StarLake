@@ -76,7 +76,6 @@ class InsertIntoSQLByPathSuite extends InsertIntoTests(false, true)
             sql(s"INSERT $overwrite TABLE $t1 SELECT * FROM $tmpView")
           }
 
-          assert(new File(dir, "_delta_log").mkdirs(), "Failed to create a _delta_log directory")
           intercept[AnalysisException] {
             sql(s"INSERT $overwrite TABLE $t1 SELECT * FROM $tmpView")
           }
@@ -120,7 +119,6 @@ class InsertIntoDataFrameByPathSuite extends InsertIntoTests(false, false)
           df.write.mode(mode).insertInto(t1)
         }
 
-        assert(new File(dir, "_delta_log").mkdirs(), "Failed to create a _delta_log directory")
         intercept[AnalysisException] {
           df.write.mode(mode).insertInto(t1)
         }

@@ -288,8 +288,6 @@ trait Transaction extends TransactionalWrite with Logging {
         }
       })
 
-      val parts = partition_info_arr_buf.toArray.map(_.range_value)
-
       val commit_info = MetaInfo(
         table_info = tableInfo,
         partitionInfoArray = partition_info_arr_buf.toArray,

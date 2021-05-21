@@ -35,7 +35,7 @@ import org.apache.spark.sql.star.utils.{DataFileInfo, PartitionInfo, TableInfo}
 import org.apache.spark.sql.util.CaseInsensitiveStringMap
 import org.apache.spark.sql.{AnalysisException, DataFrame, Dataset, SparkSession}
 
-import scala.collection.JavaConversions._
+import scala.collection.JavaConverters._
 
 class SnapshotManagement(path: String) extends Logging {
 
@@ -180,7 +180,7 @@ class SnapshotManagement(path: String) extends Logging {
         None,
         Option(fileIndex)
       )
-      val option = new CaseInsensitiveStringMap(Map("basePath" -> table_name))
+      val option = new CaseInsensitiveStringMap(Map("basePath" -> table_name).asJava)
       Dataset.ofRows(
         spark,
         DataSourceV2ScanRelation(

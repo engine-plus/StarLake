@@ -50,18 +50,18 @@ class CompactionDoNotChangeResult {
 
       val sm = SnapshotManagement(tableName)
       var rangeGroup = sm.snapshot.allDataInfo.groupBy(_.range_partitions)
-      assert(rangeGroup.forall(_._2.groupBy(_.file_group_id).forall(_._2.length == 1)))
+      assert(rangeGroup.forall(_._2.groupBy(_.file_bucket_id).forall(_._2.length == 1)))
 
       StarTable.forPath(tableName).upsert(allData.select("range", "hash", "age"))
 
 
       rangeGroup = sm.updateSnapshot().allDataInfo.groupBy(_.range_partitions)
-      assert(!rangeGroup.forall(_._2.groupBy(_.file_group_id).forall(_._2.length == 1)))
+      assert(!rangeGroup.forall(_._2.groupBy(_.file_bucket_id).forall(_._2.length == 1)))
 
 
       StarTable.forPath(tableName).compaction(true)
       rangeGroup = sm.updateSnapshot().allDataInfo.groupBy(_.range_partitions)
-      assert(rangeGroup.forall(_._2.groupBy(_.file_group_id).forall(_._2.length == 1)))
+      assert(rangeGroup.forall(_._2.groupBy(_.file_bucket_id).forall(_._2.length == 1)))
 
       val realDF = allData.groupBy("range", "hash")
         .agg(

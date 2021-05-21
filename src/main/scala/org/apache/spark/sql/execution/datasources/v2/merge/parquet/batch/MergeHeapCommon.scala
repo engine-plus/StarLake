@@ -34,6 +34,8 @@ trait MergeHeapCommon {
 
   def dequeue(): (Long, BufferedIterator[(InternalRow, Int)])
 
+  def poll(): Unit
+
   def isEmpty: Boolean
 
   def nonEmpty: Boolean
@@ -83,7 +85,7 @@ class MergeOptimizeHeap(versionKey: Map[Long, Array[(Int, DataType)]]) extends M
 
   def dequeue(): (Long, BufferedIterator[(InternalRow, Int)]) = mergeFileHeap.peek()
 
-  def poll(): (Long, BufferedIterator[(InternalRow, Int)]) = mergeFileHeap.poll()
+  def poll(): Unit = mergeFileHeap.poll()
 
   def isEmpty: Boolean = mergeFileHeap.isEmpty
 
@@ -106,6 +108,8 @@ class MergePriorityQ(versionKey: Map[Long, Array[(Int, DataType)]]) extends Merg
   override def enqueue(fileInfo: (Long, BufferedIterator[(InternalRow, Int)])) = mergeFileHeap.enqueue(fileInfo)
 
   override def dequeue(): (Long, BufferedIterator[(InternalRow, Int)]) = mergeFileHeap.dequeue()
+
+  override def poll(): Unit = {}
 
   override def isEmpty: Boolean = mergeFileHeap.isEmpty
 

@@ -578,6 +578,14 @@ object StarLakeErrors {
        """.stripMargin.trim)
   }
 
+  def useMergeOperatorForNonStarTableField(fieldName: String): Throwable ={
+    new AnalysisException(s"Field `$fieldName` is not in StarTable, you can't perform merge operator on it")
+  }
+
+  def illegalMergeOperatorException(cls: Any): Throwable ={
+    new AnalysisException(s"${cls.toString} is not a legal merge operator class")
+  }
+
 
 }
 

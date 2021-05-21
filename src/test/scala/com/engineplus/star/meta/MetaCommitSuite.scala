@@ -203,10 +203,10 @@ class MetaCommitSuite extends MetaCommitSuiteBase {
       Seq("single", "multiple")
         .foreach(f => {
           if (f.equals("single")) {
-            concurrentCommit(t, f, 50, false)
+            concurrentCommit(t, f, 15, false)
           } else if (f.equals("multiple")) {
-            concurrentCommit(t, f, 30, false)
-            concurrentCommit(t, f, 10, true)
+            concurrentCommit(t, f, 10, false)
+            concurrentCommit(t, f, 5, true)
           }
         })
     })

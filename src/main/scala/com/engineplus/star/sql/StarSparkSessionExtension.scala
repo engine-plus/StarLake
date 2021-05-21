@@ -76,11 +76,21 @@ class StarSparkSessionExtension extends (SparkSessionExtensions => Unit) {
     //      new StarLakeSqlParser(parser)
     //    }
     extensions.injectResolutionRule { session =>
-      new StarLakeAnalysis(session, session.sessionState.conf)
+      ExtractMergeOperator(session)
     }
+
+    extensions.injectResolutionRule { session =>
+      StarLakeAnalysis(session, session.sessionState.conf)
+    }
+
     extensions.injectCheckRule { session =>
       StarLakeUnsupportedOperationsCheck(session)
     }
+
+    extensions.injectCheckRule{session =>
+      NonMergeOperatorUDFCheck(session)
+    }
+
     extensions.injectPostHocResolutionRule { session =>
       PreprocessTableUpdate(session.sessionState.conf)
     }
