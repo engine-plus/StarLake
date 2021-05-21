@@ -28,15 +28,19 @@ import org.apache.spark.sql.catalyst.expressions.Expression
 import org.apache.spark.sql.catalyst.expressions.codegen.GenerateUnsafeProjection
 import org.apache.spark.sql.connector.read._
 import org.apache.spark.sql.execution.datasources.parquet.{ParquetReadSupport, ParquetWriteSupport}
+import org.apache.spark.sql.execution.datasources.v2.merge.parquet.batch.merge_operator.MergeOperator
 import org.apache.spark.sql.execution.datasources.v2.merge.parquet.{MergeFilePartitionReaderFactory, MergeParquetPartitionReaderFactory}
 import org.apache.spark.sql.internal.SQLConf
 import org.apache.spark.sql.sources.Filter
-import org.apache.spark.sql.star.StarLakeFileIndexV2
+import org.apache.spark.sql.star.{StarLakeFileIndexV2, StarLakeUtils}
 import org.apache.spark.sql.star.utils.{DataFileInfo, TableInfo}
 import org.apache.spark.sql.types.StructType
 import org.apache.spark.sql.util.CaseInsensitiveStringMap
 import org.apache.spark.sql.{AnalysisException, SparkSession}
 import org.apache.spark.util.SerializableConfiguration
+
+import scala.collection.JavaConverters._
+import scala.collection.mutable.ArrayBuffer
 
 abstract class MergeDeltaParquetScan(sparkSession: SparkSession,
                                      hadoopConf: Configuration,
@@ -103,24 +107,40 @@ abstract class MergeDeltaParquetScan(sparkSession: SparkSession,
     val broadcastedConf = sparkSession.sparkContext.broadcast(
       new SerializableConfiguration(hadoopConf))
 
+    //get merge operator info
+    val allSchema = (readDataSchema ++ readPartitionSchema).map(m => (m.name, m.dataType)).toMap
+
+    val mergeOperatorInfo = options.keySet().asScala
+      .filter(_.startsWith(StarLakeUtils.MERGE_OP_COL))
+      .map(k => {
+        val realColName = k.replaceFirst(StarLakeUtils.MERGE_OP_COL, "")
+        assert(allSchema.contains(realColName),
+          s"merge column `$realColName` not found in [${allSchema.keys.mkString(",")}]")
+
+        val mergeClass = Class.forName(options.get(k)).getConstructors()(0)
+          .newInstance()
+          .asInstanceOf[MergeOperator[Any]]
+        (realColName, mergeClass)
+      }).toMap
+
 
     val canUseAsyncReader = tableInfo.table_name.startsWith("s3") || tableInfo.table_name.startsWith("oss")
     val asyncFactoryName = "org.apache.spark.sql.execution.datasources.v2.parquet.MergeParquetPartitionAsyncReaderFactory"
     val (hasAsyncClass, cls) = MetaUtils.getAsyncClass(asyncFactoryName)
 
-    if (canUseAsyncReader && hasAsyncClass){
+    if (canUseAsyncReader && hasAsyncClass) {
       logInfo("================  async merge scan   ==============================")
 
       cls.getConstructors()(0)
         .newInstance(sparkSession.sessionState.conf, broadcastedConf,
-          dataSchema, readDataSchema, readPartitionSchema, pushedFilters)
+          dataSchema, readDataSchema, readPartitionSchema, pushedFilters, mergeOperatorInfo)
         .asInstanceOf[MergeFilePartitionReaderFactory]
 
-    }else{
+    } else {
       logInfo("================  merge scan no async  ==============================")
 
       MergeParquetPartitionReaderFactory(sparkSession.sessionState.conf, broadcastedConf,
-        dataSchema, readDataSchema, readPartitionSchema, pushedFilters)
+        dataSchema, readDataSchema, readPartitionSchema, pushedFilters, mergeOperatorInfo)
     }
 
   }
@@ -200,8 +220,14 @@ abstract class MergeDeltaParquetScan(sparkSession: SparkSession,
       }
     }
 
-    MergeFilePartition.getFilePartitions(splitFiles, tableInfo.bucket_num)
+    //    MergeFilePartition.getFilePartitions(sparkSession.sessionState.conf, splitFiles, tableInfo.bucket_num)
+    getFilePartitions(sparkSession.sessionState.conf, splitFiles, tableInfo.bucket_num)
   }
+
+  def getFilePartitions(conf: SQLConf,
+                        partitionedFiles: Seq[MergePartitionedFile],
+                        bucketNum: Int): Seq[MergeFilePartition]
+
 
   /**
     * If a file with `path` is unsplittable, return the unsplittable reason,
@@ -241,17 +267,17 @@ abstract class MergeDeltaParquetScan(sparkSession: SparkSession,
 
 }
 
-case class OnePartitionMergeScan(sparkSession: SparkSession,
-                                 hadoopConf: Configuration,
-                                 fileIndex: StarLakeFileIndexV2,
-                                 dataSchema: StructType,
-                                 readDataSchema: StructType,
-                                 readPartitionSchema: StructType,
-                                 pushedFilters: Array[Filter],
-                                 options: CaseInsensitiveStringMap,
-                                 tableInfo: TableInfo,
-                                 partitionFilters: Seq[Expression] = Seq.empty,
-                                 dataFilters: Seq[Expression] = Seq.empty)
+case class OnePartitionMergeBucketScan(sparkSession: SparkSession,
+                                       hadoopConf: Configuration,
+                                       fileIndex: StarLakeFileIndexV2,
+                                       dataSchema: StructType,
+                                       readDataSchema: StructType,
+                                       readPartitionSchema: StructType,
+                                       pushedFilters: Array[Filter],
+                                       options: CaseInsensitiveStringMap,
+                                       tableInfo: TableInfo,
+                                       partitionFilters: Seq[Expression] = Seq.empty,
+                                       dataFilters: Seq[Expression] = Seq.empty)
   extends MergeDeltaParquetScan(sparkSession,
     hadoopConf,
     fileIndex,
@@ -263,14 +289,87 @@ case class OnePartitionMergeScan(sparkSession: SparkSession,
     tableInfo,
     partitionFilters,
     dataFilters) {
+
+  override def getFilePartitions(conf: SQLConf,
+                                 partitionedFiles: Seq[MergePartitionedFile],
+                                 bucketNum: Int): Seq[MergeFilePartition] = {
+    val groupByPartition = partitionedFiles.groupBy(_.rangeKey)
+
+    assert(groupByPartition.size == 1)
+
+    val fileWithBucketId = groupByPartition.head._2
+      .groupBy(_.fileBucketId).map(f => (f._1, f._2.toArray))
+
+    val isSingleFile = groupByPartition.head._2.map(_.writeVersion).toSet.size == 1
+
+    Seq.tabulate(bucketNum) { bucketId =>
+      val files = fileWithBucketId.getOrElse(bucketId, Array.empty)
+      assert(files.length == files.map(_.writeVersion).toSet.size,
+        "Files has duplicate write version, it may has too many base file, have a check!")
+      MergeFilePartition(bucketId, Array(files), isSingleFile)
+    }
+  }
+
+
   override def equals(obj: Any): Boolean = obj match {
-    case p: OnePartitionMergeScan =>
+    case p: OnePartitionMergeBucketScan =>
       super.equals(p) && dataSchema == p.dataSchema && options == p.options &&
         equivalentFilters(pushedFilters, p.pushedFilters)
     case _ => false
   }
 }
 
+
+case class MultiPartitionMergeBucketScan(sparkSession: SparkSession,
+                                         hadoopConf: Configuration,
+                                         fileIndex: StarLakeFileIndexV2,
+                                         dataSchema: StructType,
+                                         readDataSchema: StructType,
+                                         readPartitionSchema: StructType,
+                                         pushedFilters: Array[Filter],
+                                         options: CaseInsensitiveStringMap,
+                                         tableInfo: TableInfo,
+                                         partitionFilters: Seq[Expression] = Seq.empty,
+                                         dataFilters: Seq[Expression] = Seq.empty)
+  extends MergeDeltaParquetScan(
+    sparkSession,
+    hadoopConf,
+    fileIndex,
+    dataSchema,
+    readDataSchema,
+    readPartitionSchema,
+    pushedFilters,
+    options,
+    tableInfo,
+    partitionFilters,
+    dataFilters) {
+
+  override def getFilePartitions(conf: SQLConf,
+                                 partitionedFiles: Seq[MergePartitionedFile],
+                                 bucketNum: Int): Seq[MergeFilePartition] = {
+    val fileWithBucketId = partitionedFiles
+      .groupBy(_.fileBucketId)
+      .map(f => (f._1, f._2.groupBy(_.rangeKey)))
+
+    val isSingleFile = fileWithBucketId.forall(f1 => f1._2.forall(f2 => f2._2.size == 1))
+
+    Seq.tabulate(bucketNum) { bucketId =>
+      val files = fileWithBucketId.getOrElse(bucketId, Map.empty[String, Seq[MergePartitionedFile]])
+        .map(_._2.toArray)
+      assert(files.forall(f => f.length == f.map(_.writeVersion).toSet.size),
+        "Files has duplicate write version, it may has too many base file, have a check!")
+      MergeFilePartition(bucketId, files.toArray, isSingleFile)
+    }
+  }
+
+
+  override def equals(obj: Any): Boolean = obj match {
+    case p: MultiPartitionMergeBucketScan =>
+      super.equals(p) && dataSchema == p.dataSchema && options == p.options &&
+        equivalentFilters(pushedFilters, p.pushedFilters)
+    case _ => false
+  }
+}
 
 case class MultiPartitionMergeScan(sparkSession: SparkSession,
                                    hadoopConf: Configuration,
@@ -283,7 +382,8 @@ case class MultiPartitionMergeScan(sparkSession: SparkSession,
                                    tableInfo: TableInfo,
                                    partitionFilters: Seq[Expression] = Seq.empty,
                                    dataFilters: Seq[Expression] = Seq.empty)
-  extends MergeDeltaParquetScan(sparkSession,
+  extends MergeDeltaParquetScan(
+    sparkSession,
     hadoopConf,
     fileIndex,
     dataSchema,
@@ -294,6 +394,30 @@ case class MultiPartitionMergeScan(sparkSession: SparkSession,
     tableInfo,
     partitionFilters,
     dataFilters) {
+
+  override def getFilePartitions(conf: SQLConf,
+                                 partitionedFiles: Seq[MergePartitionedFile],
+                                 bucketNum: Int): Seq[MergeFilePartition] = {
+    val groupByPartition = partitionedFiles.groupBy(_.rangeKey)
+
+    assert(groupByPartition.size != 1)
+
+    var i = 0
+    val partitions = new ArrayBuffer[MergeFilePartition]
+
+    groupByPartition.foreach(p => {
+      val isSingleFile = p._2.map(_.writeVersion).toSet.size == 1
+      p._2.groupBy(_.fileBucketId).foreach(g => {
+        val files = g._2.toArray
+        assert(files.length == files.map(_.writeVersion).toSet.size,
+          "Files has duplicate write version, it may has too many base files, have a check!")
+        partitions += MergeFilePartition(i, Array(files), isSingleFile)
+        i = i + 1
+      })
+    })
+    partitions
+  }
+
   override def equals(obj: Any): Boolean = obj match {
     case p: MultiPartitionMergeScan =>
       super.equals(p) && dataSchema == p.dataSchema && options == p.options &&

@@ -19,13 +19,16 @@ package org.apache.spark.sql.execution.datasources.v2.merge.parquet.batch
 import org.apache.spark.sql.catalyst.InternalRow
 import org.apache.spark.sql.connector.read.PartitionReader
 import org.apache.spark.sql.execution.datasources.v2.merge.MergePartitionedFile
+import org.apache.spark.sql.execution.datasources.v2.merge.parquet.batch.merge_operator.{MergeColumnarBatchNew, MergeOperator}
+import org.apache.spark.sql.types.DataType
 import org.apache.spark.sql.vectorized.ColumnarBatch
 
 import scala.collection.JavaConverters._
+import scala.collection.mutable.ArrayBuffer
 import scala.collection.{BufferedIterator, mutable}
 
 /**
-  * Created by luozhenglin 
+  * Created by luozhenglin
   * on 2021/3/2 11:39 AM
   */
 object MergeUtils {
@@ -46,18 +49,15 @@ object MergeUtils {
     */
   def getNextBatch(filesInfo: Seq[(MergePartitionedFile, PartitionReader[ColumnarBatch])]):
   Seq[(MergePartitionedFile, ColumnarBatch)] = {
-    filesInfo.filter(fileInfo_asynReader => fileInfo_asynReader._2.next())
-      .map(fileInfo_asynReader => fileInfo_asynReader._1 -> fileInfo_asynReader._2.get())
+    filesInfo.filter(fileInfoReader => fileInfoReader._2.next())
+      .map(fileInfoReader => fileInfoReader._1 -> fileInfoReader._2.get())
   }
 
-  /**
-    * initialize mergeColumnarsBatch object and mergeBatchColumnIndex
-    *
-    */
+
+  //initialize mergeBatchColumnIndex
   def initMergeBatchAndMergeIndex(fileSeq: Seq[(MergePartitionedFile, ColumnarBatch)],
                                   mergeColumnIndexMap: mutable.Map[Long, Array[Int]]): Unit = {
-    //initialize mergeBatchColumnIndex
-    val versionNumsT = fileSeq.sortWith((t1, t2) => t1._1.writeVersion < t2._1.writeVersion)
+    val versionNumsT: Array[(Long, Int)] = fileSeq.sortWith((t1, t2) => t1._1.writeVersion < t2._1.writeVersion)
       .toArray.map(t => (t._1.writeVersion, t._2.numCols()))
 
     var lastLen = 0
@@ -74,18 +74,31 @@ object MergeUtils {
 
   }
 
-  def initMergeBatch(fileSeq: Seq[(MergePartitionedFile, ColumnarBatch)]): MergeColumnarsBatch = {
-    //initialize mergeColumnarsBatch object
+  //initialize mergeColumnarBatch object
+  def initMergeBatchNew(fileSeq: Seq[(MergePartitionedFile, ColumnarBatch)],
+                        mergeOps: Seq[MergeOperator[Any]],
+                        indexTypeArray: Seq[(Int, DataType)]): MergeColumnarBatchNew = {
     val arrayColumn =
       fileSeq.sortWith((t1, t2) => t1._1.writeVersion < t2._1.writeVersion).toArray
         .map(t => {
           Range(0, t._2.numCols()).map(t._2.column)
         })
         .flatMap(_.toSeq)
-    new MergeColumnarsBatch(arrayColumn)
+    new MergeColumnarBatchNew(arrayColumn, mergeOps, indexTypeArray)
   }
 
-  def initMergeBatch(file: (MergePartitionedFile, ColumnarBatch), resIndex: Array[Int]): SingletonFIleColumnarsBatch = {
+  //initialize mergeColumnarBatch object
+//  def initMergeBatch(fileSeq: Seq[(MergePartitionedFile, ColumnarBatch)]): MergeColumnarBatch = {
+//    val arrayColumn =
+//      fileSeq.sortWith((t1, t2) => t1._1.writeVersion < t2._1.writeVersion).toArray
+//        .map(t => {
+//          Range(0, t._2.numCols()).map(t._2.column)
+//        })
+//        .flatMap(_.toSeq)
+//    new MergeColumnarBatch(arrayColumn)
+//  }
+
+  def initMergeBatch(file: (MergePartitionedFile, ColumnarBatch), resIndex: Array[Int]): SingletonFileColumnarBatch = {
     val columnArr =
       resIndex.map(res => {
         if (res == -1) {
@@ -94,12 +107,36 @@ object MergeUtils {
           file._2.column(res)
         }
       })
-    new SingletonFIleColumnarsBatch(columnArr)
+    new SingletonFileColumnarBatch(columnArr)
   }
 
   def resetBatchIndex(resultIndex: Array[(Integer, Integer)]): Unit = {
     for (i <- resultIndex.indices) {
       resultIndex(i) = (-1, -1)
+    }
+  }
+
+  def intBatchIndexMerge(resultIndex: Array[ArrayBuffer[(Int, Int)]]): Unit = {
+    for (i <- resultIndex.indices) {
+      resultIndex(i) = new ArrayBuffer[(Int, Int)]()
+    }
+  }
+
+  def resetBatchIndexMerge(resultIndex: Array[ArrayBuffer[(Int, Int)]]): Unit = {
+    for (i <- resultIndex.indices) {
+      resultIndex(i).clear()
+    }
+  }
+
+  def initTemporaryRow(temporaryRow: Array[ArrayBuffer[Any]]): Unit = {
+    for (i <- temporaryRow.indices) {
+      temporaryRow(i) = new ArrayBuffer[Any]()
+    }
+  }
+
+  def resetTemporaryRow(temporaryRow: Array[ArrayBuffer[Any]]): Unit = {
+    for (i <- temporaryRow.indices) {
+      temporaryRow(i).clear()
     }
   }
 

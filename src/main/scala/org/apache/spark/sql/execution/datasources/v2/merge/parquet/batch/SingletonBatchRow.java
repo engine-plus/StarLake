@@ -26,7 +26,7 @@ import org.apache.spark.sql.vectorized.ColumnarRow;
 import org.apache.spark.unsafe.types.CalendarInterval;
 import org.apache.spark.unsafe.types.UTF8String;
 
-class SingletonBatchRow extends InternalRow {
+class SingletonBatchRow extends MergeBatchRow {
 
     int rowId;
     private final ColumnVector[] columns;
@@ -52,34 +52,7 @@ class SingletonBatchRow extends InternalRow {
                 row.setNullAt(i);
             } else {
                 DataType dt = columns[i].dataType();
-                if (dt instanceof BooleanType) {
-                    row.setBoolean(i, getBoolean(i));
-                } else if (dt instanceof ByteType) {
-                    row.setByte(i, getByte(i));
-                } else if (dt instanceof ShortType) {
-                    row.setShort(i, getShort(i));
-                } else if (dt instanceof IntegerType) {
-                    row.setInt(i, getInt(i));
-                } else if (dt instanceof LongType) {
-                    row.setLong(i, getLong(i));
-                } else if (dt instanceof FloatType) {
-                    row.setFloat(i, getFloat(i));
-                } else if (dt instanceof DoubleType) {
-                    row.setDouble(i, getDouble(i));
-                } else if (dt instanceof StringType) {
-                    row.update(i, getUTF8String(i).copy());
-                } else if (dt instanceof BinaryType) {
-                    row.update(i, getBinary(i));
-                } else if (dt instanceof DecimalType) {
-                    DecimalType t = (DecimalType) dt;
-                    row.setDecimal(i, getDecimal(i, t.precision(), t.scale()), t.precision());
-                } else if (dt instanceof DateType) {
-                    row.setInt(i, getInt(i));
-                } else if (dt instanceof TimestampType) {
-                    row.setLong(i, getLong(i));
-                } else {
-                    throw new RuntimeException("Not implemented. " + dt);
-                }
+                setRowData(i, dt, row);
             }
         }
         return row;
@@ -164,44 +137,6 @@ class SingletonBatchRow extends InternalRow {
     @Override
     public ColumnarMap getMap(int ordinal) {
         return columns[ordinal].getMap(rowId);
-    }
-
-    @Override
-    public Object get(int ordinal, DataType dataType) {
-        if (dataType instanceof BooleanType) {
-            return getBoolean(ordinal);
-        } else if (dataType instanceof ByteType) {
-            return getByte(ordinal);
-        } else if (dataType instanceof ShortType) {
-            return getShort(ordinal);
-        } else if (dataType instanceof IntegerType) {
-            return getInt(ordinal);
-        } else if (dataType instanceof LongType) {
-            return getLong(ordinal);
-        } else if (dataType instanceof FloatType) {
-            return getFloat(ordinal);
-        } else if (dataType instanceof DoubleType) {
-            return getDouble(ordinal);
-        } else if (dataType instanceof StringType) {
-            return getUTF8String(ordinal);
-        } else if (dataType instanceof BinaryType) {
-            return getBinary(ordinal);
-        } else if (dataType instanceof DecimalType) {
-            DecimalType t = (DecimalType) dataType;
-            return getDecimal(ordinal, t.precision(), t.scale());
-        } else if (dataType instanceof DateType) {
-            return getInt(ordinal);
-        } else if (dataType instanceof TimestampType) {
-            return getLong(ordinal);
-        } else if (dataType instanceof ArrayType) {
-            return getArray(ordinal);
-        } else if (dataType instanceof StructType) {
-            return getStruct(ordinal, ((StructType) dataType).fields().length);
-        } else if (dataType instanceof MapType) {
-            return getMap(ordinal);
-        } else {
-            throw new UnsupportedOperationException("Datatype not supported " + dataType);
-        }
     }
 
     @Override

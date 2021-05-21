@@ -173,7 +173,7 @@ trait TransactionalWrite {
 
       val sqlConf = spark.sessionState.conf
       val writeOptions = new mutable.HashMap[String, String]()
-      if (sqlConf.getConf(StarLakeSQLConf.USE_PARQUET_COMPRESSION)) {
+      if (sqlConf.getConf(StarLakeSQLConf.PARQUET_COMPRESSION_ENABLE)) {
         writeOptions.put("compression", sqlConf.getConf(StarLakeSQLConf.PARQUET_COMPRESSION))
       } else {
         writeOptions.put("compression", "uncompressed")

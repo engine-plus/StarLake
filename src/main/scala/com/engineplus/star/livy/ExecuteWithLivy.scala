@@ -43,8 +43,15 @@ object ExecuteWithLivy {
   }
 }
 
+class CompactionJob(tableName: String, force: Boolean)
+  extends Job[Unit] {
+  override def call(jobContext: JobContext): Unit = {
+    val ss = jobContext.sqlctx().sparkSession
+    StarTable.forPath(ss, tableName).compaction(force)
+  }
+}
 
-class CompactionJob(tableName: String, condition: String, force: Boolean)
+class CompactionJobWithCondition(tableName: String, condition: String, force: Boolean)
   extends Job[Unit] {
   override def call(jobContext: JobContext): Unit = {
     val ss = jobContext.sqlctx().sparkSession

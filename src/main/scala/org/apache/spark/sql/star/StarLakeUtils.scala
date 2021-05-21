@@ -36,6 +36,9 @@ import org.apache.spark.sql.{AnalysisException, SparkSession}
 
 object StarLakeUtils extends PredicateHelper {
 
+  val MERGE_OP_COL = "_star_merge_col_name_"
+  val MERGE_OP = "_star_merge_op_"
+
   /** Check whether this table is a StarTable based on information from the Catalog. */
   def isStarLakeTable(table: CatalogTable): Boolean = StarLakeSourceUtils.isStarLakeTable(table.provider)
 

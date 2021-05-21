@@ -75,7 +75,7 @@ case class StarLakePostHocAnalysis(spark: SparkSession) extends Rule[LogicalPlan
 
   def findStarLakeRelation(plan: LogicalPlan, outCols: Set[String]): (Boolean, Int) = {
     plan match {
-      case DataSourceV2Relation(StarLakeTableV2(_, path, _, _, _), _, _, _, _) =>
+      case DataSourceV2Relation(StarLakeTableV2(_, path, _, _, _, _), _, _, _, _) =>
         val tableInfo = SnapshotManagement(path).getTableInfoOnly
         val hashCols = tableInfo.hash_partition_columns.toSet
         if (hashCols.equals(outCols) && tableInfo.bucket_num != -1) {

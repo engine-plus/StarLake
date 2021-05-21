@@ -18,6 +18,7 @@ package org.apache.spark.sql.star.test
 
 import com.engineplus.star.tables.StarTable
 import org.apache.spark.SparkConf
+import org.apache.spark.sql.execution.datasources.v2.merge.parquet.batch.merge_operator.MergeOperator
 import org.apache.spark.sql.functions.col
 import org.apache.spark.sql.{DataFrame, SparkSession}
 
@@ -37,11 +38,6 @@ object TestUtils {
     sparkConf.set("spark.sql.streaming.schemaInference", "true")
     sparkConf.set("spark.engineplus.star.meta.streaming_info.timeout", "120000")
 //    sparkConf.set("spark.engineplus.star.parquet.block.size", "20")
-
-//    sparkConf.set("spark.sql.s3.AsyncFileSystemThreadSize", "5")
-//    sparkConf.set("spark.sql.parquet.concurrent.blockCacheSize", "2")
-//    sparkConf.set("spark.sql.parquet.concurrent.MaxblockRequestSize", "2")
-//    sparkConf.set("spark.sql.s3.requestDataRetrySize", "2")
 
     sparkConf.set("spark.default.parallelism", "8")
 
@@ -184,4 +180,18 @@ object TestUtils {
   }
 
 
+}
+
+
+class MergeOpInt extends MergeOperator[Int]{
+  override def mergeData(input: Seq[Int]): Int = {
+    input.sum
+  }
+}
+
+
+class MergeOpString extends MergeOperator[String]{
+  override def mergeData(input: Seq[String]): String = {
+    input.mkString(",")
+  }
 }

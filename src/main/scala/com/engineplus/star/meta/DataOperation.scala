@@ -119,7 +119,7 @@ object DataOperation extends Logging {
   }
 
   //redo add file
-  def redoAddNewDataFile(info: undoLogInfo): Unit = {
+  def redoAddedNewDataFile(info: undoLogInfo): Unit = {
     addNewDataFile(
       info.table_id,
       info.range_id,

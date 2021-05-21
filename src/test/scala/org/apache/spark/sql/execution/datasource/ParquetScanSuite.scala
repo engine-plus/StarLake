@@ -19,6 +19,7 @@ package org.apache.spark.sql.execution.datasource
 import com.engineplus.star.tables.StarTable
 import org.apache.spark.sql.QueryTest
 import org.apache.spark.sql.functions.{col, last}
+import org.apache.spark.sql.star.sources.StarLakeSQLConf
 import org.apache.spark.sql.star.test.{StarLakeTestUtils, TestUtils}
 import org.apache.spark.sql.test.SharedSparkSession
 import org.scalatest.BeforeAndAfterEach
@@ -48,7 +49,7 @@ class ParquetScanSuite extends QueryTest
 
   }
 
-  test("It should use OnePartitionMergeScan when reading one partition") {
+  test("It should use OnePartitionMergeBucketScan when reading one partition") {
     withTempDir(dir => {
       val tablePath = dir.getCanonicalPath
       Seq((20201101, 1, 1), (20201101, 2, 2), (20201101, 3, 3))
@@ -63,14 +64,14 @@ class ParquetScanSuite extends QueryTest
       val plan = StarTable.forPath(tablePath).toDF.queryExecution.toString()
 
       logInfo(plan)
-      assert(plan.contains("OnePartitionMergeScan") && plan.contains("withPartitionAndOrdering"))
+      assert(plan.contains("OnePartitionMergeBucketScan") && plan.contains("withPartitionAndOrdering"))
 
     })
 
   }
 
 
-  test("It should use MultiPartitionMergeScan when reading one partition") {
+  test("It should use MultiPartitionMergeScan when reading multi partition") {
     withTempDir(dir => {
       val tablePath = dir.getCanonicalPath
       Seq((20201101, 1, 1), (20201101, 2, 2), (20201101, 3, 3), (20201102, 1, 1))
@@ -82,11 +83,21 @@ class ParquetScanSuite extends QueryTest
         .format("star")
         .save(tablePath)
 
-      val plan = StarTable.forPath(tablePath).toDF.queryExecution.toString()
+      withSQLConf(StarLakeSQLConf.BUCKET_SCAN_MULTI_PARTITION_ENABLE.key -> "true") {
+        val plan = StarTable.forPath(tablePath).toDF.queryExecution.toString()
 
-      logInfo(plan)
-      assert(plan.contains("MultiPartitionMergeScan") &&
-        !plan.contains("withPartitionAndOrdering"))
+        logInfo(plan)
+        assert(plan.contains("MultiPartitionMergeBucketScan") &&
+          plan.contains("withPartition "))
+      }
+
+      withSQLConf(StarLakeSQLConf.BUCKET_SCAN_MULTI_PARTITION_ENABLE.key -> "false") {
+        val plan = StarTable.forPath(tablePath).toDF.queryExecution.toString()
+
+        logInfo(plan)
+        assert(plan.contains("MultiPartitionMergeScan") &&
+          !plan.contains("withPartitionAndOrdering"))
+      }
 
     })
   }
@@ -116,26 +127,28 @@ class ParquetScanSuite extends QueryTest
 
 
   test("It should use ParquetScan when reading multi compacted partition") {
-    withTempDir(dir => {
-      val tablePath = dir.getCanonicalPath
-      Seq((20201101, 1, 1), (20201101, 2, 2), (20201101, 3, 3), (20201102, 1, 1))
-        .toDF("range", "hash", "value")
-        .write
-        .option("rangePartitions", "range")
-        .option("hashPartitions", "hash")
-        .option("hashBucketNum", "2")
-        .format("star")
-        .save(tablePath)
+    withSQLConf(StarLakeSQLConf.BUCKET_SCAN_MULTI_PARTITION_ENABLE.key -> "false") {
+      withTempDir(dir => {
+        val tablePath = dir.getCanonicalPath
+        Seq((20201101, 1, 1), (20201101, 2, 2), (20201101, 3, 3), (20201102, 1, 1))
+          .toDF("range", "hash", "value")
+          .write
+          .option("rangePartitions", "range")
+          .option("hashPartitions", "hash")
+          .option("hashBucketNum", "2")
+          .format("star")
+          .save(tablePath)
 
-      val table = StarTable.forPath(tablePath)
-      table.compaction()
+        val table = StarTable.forPath(tablePath)
+        table.compaction()
 
-      val plan = table.toDF.queryExecution.toString()
+        val plan = table.toDF.queryExecution.toString()
 
-      logInfo(plan)
-      assert(plan.contains("ParquetScan"))
+        logInfo(plan)
+        assert(plan.contains("ParquetScan"))
 
-    })
+      })
+    }
   }
 
 
@@ -154,10 +167,19 @@ class ParquetScanSuite extends QueryTest
       val table = StarTable.forPath(tablePath)
       table.compaction("range=20201101")
 
-      val plan = table.toDF.queryExecution.toString()
+      withSQLConf(StarLakeSQLConf.BUCKET_SCAN_MULTI_PARTITION_ENABLE.key -> "true") {
+        val plan = table.toDF.queryExecution.toString()
 
-      logInfo(plan)
-      assert(plan.contains("MultiPartitionMergeScan"))
+        logInfo(plan)
+        assert(plan.contains("MultiPartitionMergeBucketScan"))
+      }
+
+      withSQLConf(StarLakeSQLConf.BUCKET_SCAN_MULTI_PARTITION_ENABLE.key -> "false") {
+        val plan = table.toDF.queryExecution.toString()
+
+        logInfo(plan)
+        assert(plan.contains("MultiPartitionMergeScan"))
+      }
 
     })
   }
@@ -179,6 +201,53 @@ class ParquetScanSuite extends QueryTest
             .format("star")
             .save(table1)
           Seq((20201101, "1", "11"), (20201101, "2", "22"), (20201101, "3", "33"))
+            .toDF("range", "hash", "value")
+            .write
+            .option("rangePartitions", "range")
+            .option("hashPartitions", "hash")
+            .option("hashBucketNum", "2")
+            .format("star")
+            .save(table2)
+
+          StarTable.forPath(table1).toDF.createOrReplaceTempView("t1")
+          StarTable.forPath(table2).toDF.createOrReplaceTempView("t2")
+
+          val plan = spark.sql(
+            """
+              |select t1.range,t1.hash,t1.value,t2.range,t2.hash,t2.value
+              |from t1 join t2 on t1.hash=t2.hash
+            """.stripMargin)
+            .queryExecution
+            .toString()
+
+          logInfo(plan)
+          assert(!plan.contains("Exchange"))
+
+        })
+      })
+    }
+
+  }
+
+
+  test("join on multi partitions should has no shuffle when enable bucket scan") {
+    withSQLConf(
+      "spark.sql.autoBroadcastJoinThreshold" -> "-1",
+      StarLakeSQLConf.BUCKET_SCAN_MULTI_PARTITION_ENABLE.key -> "true") {
+      withTempDir(dir1 => {
+        withTempDir(dir2 => {
+          val table1 = dir1.getCanonicalPath
+          val table2 = dir2.getCanonicalPath
+
+          Seq((20201101, "1", "1"), (20201101, "2", "2"), (20201101, "3", "3"), (20201102, "3", "3"))
+            .toDF("range", "hash", "value")
+            .write
+            .option("rangePartitions", "range")
+            .option("hashPartitions", "hash")
+            .option("hashBucketNum", "2")
+            .format("star")
+            .save(table1)
+          Seq((20201101, "1", "11"), (20201101, "2", "22"), (20201101, "3", "33"), (20201102, "3", "33"))
             .toDF("range", "hash", "value")
             .write
             .option("rangePartitions", "range")

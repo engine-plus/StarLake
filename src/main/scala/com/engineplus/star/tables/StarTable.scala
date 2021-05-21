@@ -19,13 +19,14 @@ package com.engineplus.star.tables
 import java.io.File
 import java.net.URI
 
-import com.engineplus.star.livy.{CompactionJob, ExecuteWithLivy}
+import com.engineplus.star.livy.{CompactionJob, CompactionJobWithCondition, ExecuteWithLivy}
 import com.engineplus.star.tables.execution.StarTableOperations
 import org.apache.hadoop.fs.Path
 import org.apache.spark.annotation._
 import org.apache.spark.internal.Logging
 import org.apache.spark.sql._
 import org.apache.spark.sql.catalyst.expressions.{Expression, Literal}
+import org.apache.spark.sql.execution.datasources.v2.merge.parquet.batch.merge_operator.MergeOperator
 import org.apache.spark.sql.star.exception.StarLakeErrors
 import org.apache.spark.sql.star.sources.StarLakeSourceUtils
 import org.apache.spark.sql.star.{SnapshotManagement, StarLakeTableIdentifier, StarLakeUtils}
@@ -33,7 +34,7 @@ import org.apache.spark.sql.star.{SnapshotManagement, StarLakeTableIdentifier, S
 import scala.collection.JavaConverters._
 
 class StarTable(df: => Dataset[Row], snapshotManagement: SnapshotManagement)
-  extends StarTableOperations with Logging{
+  extends StarTableOperations with Logging {
 
   /**
     * Apply an alias to the StarTable. This is similar to `Dataset.as(alias)` or
@@ -128,7 +129,7 @@ class StarTable(df: => Dataset[Row], snapshotManagement: SnapshotManagement)
     */
   @Evolving
   def update(set: java.util.Map[String, Column]): Unit = {
-    executeUpdate(set.asScala, None)
+    executeUpdate(set.asScala.toMap, None)
   }
 
   /**
@@ -176,7 +177,7 @@ class StarTable(df: => Dataset[Row], snapshotManagement: SnapshotManagement)
     */
   @Evolving
   def update(condition: Column, set: java.util.Map[String, Column]): Unit = {
-    executeUpdate(set.asScala, Some(condition))
+    executeUpdate(set.asScala.toMap, Some(condition))
   }
 
   /**
@@ -212,7 +213,7 @@ class StarTable(df: => Dataset[Row], snapshotManagement: SnapshotManagement)
     */
   @Evolving
   def updateExpr(set: java.util.Map[String, String]): Unit = {
-    executeUpdate(toStrColumnMap(set.asScala), None)
+    executeUpdate(toStrColumnMap(set.asScala.toMap), None)
   }
 
   /**
@@ -257,7 +258,7 @@ class StarTable(df: => Dataset[Row], snapshotManagement: SnapshotManagement)
     */
   @Evolving
   def updateExpr(condition: String, set: java.util.Map[String, String]): Unit = {
-    executeUpdate(toStrColumnMap(set.asScala), Some(functions.expr(condition)))
+    executeUpdate(toStrColumnMap(set.asScala.toMap), Some(functions.expr(condition)))
   }
 
 
@@ -290,21 +291,59 @@ class StarTable(df: => Dataset[Row], snapshotManagement: SnapshotManagement)
   }
 
 
+  //by default, force perform compaction on whole table
+  def compaction(): Unit = {
+    compaction("", true, Map.empty[String, Any])
+  }
+
+  def compaction(condition: String): Unit = {
+    compaction(condition, true, Map.empty[String, Any])
+  }
+
+  def compaction(mergeOperatorInfo: Map[String, Any]): Unit = {
+    compaction("", true, mergeOperatorInfo)
+  }
+
+  def compaction(condition: String,
+                 mergeOperatorInfo: Map[String, Any]): Unit = {
+    compaction(condition, true, mergeOperatorInfo)
+  }
+
+  def compaction(force: Boolean,
+                 mergeOperatorInfo: Map[String, Any] = Map.empty[String, Any]): Unit = {
+    compaction("", force, mergeOperatorInfo)
+  }
+
+  def compaction(condition: String,
+                 force: Boolean): Unit = {
+    compaction(condition, true, Map.empty[String, Any])
+  }
+
   /**
     * If `force` set to true, it will ignore delta file num, compaction interval,
     * and base file(first write), compaction will execute if is_compacted is not true.
     *
     */
-  def compaction(force: Boolean): Unit = {
-    executeCompaction(df, snapshotManagement, "", force)
-  }
+  def compaction(condition: String,
+                 force: Boolean,
+                 mergeOperatorInfo: Map[String, Any]): Unit = {
+    val newMergeOpInfo = mergeOperatorInfo.map(m => {
+      val key =
+        if (!m._1.startsWith(StarLakeUtils.MERGE_OP_COL)) {
+          s"${StarLakeUtils.MERGE_OP_COL}${m._1}"
+        } else {
+          m._1
+        }
+      val value =
+        if (m._2.isInstanceOf[MergeOperator[Any]]) {
+          m._2.getClass.getName
+        } else {
+          throw StarLakeErrors.illegalMergeOperatorException(m._2)
+        }
+      (key, value)
+    })
 
-  def compaction(condition: String = ""): Unit = {
-    executeCompaction(df, snapshotManagement, condition)
-  }
-
-  def compaction(condition: String, force: Boolean): Unit = {
-    executeCompaction(df, snapshotManagement, condition, force)
+    executeCompaction(df, snapshotManagement, condition, force, newMergeOpInfo)
   }
 
   /**
@@ -324,7 +363,7 @@ class StarTable(df: => Dataset[Row], snapshotManagement: SnapshotManagement)
     *   - spark.livy.upload.jars
     *
     */
-  def compactionWithLivy(conf: Map[String, String], condition: String, force: Boolean = true): Unit = {
+  def compactionWithLivy(conf: Map[String, String], condition: String, force: Boolean): Unit = {
     val livyHostKey = "spark.livy.host"
     val livyUploadJarsKey = "spark.livy.upload.jars"
 
@@ -342,11 +381,27 @@ class StarTable(df: => Dataset[Row], snapshotManagement: SnapshotManagement)
         livyClient.addJar(new URI(path)).get()
       })
     }
-    livyClient.uploadJar(new File(ExecuteWithLivy.getSourcePath(this))).get()
-    livyClient.submit(new CompactionJob(snapshotManagement.table_name, condition, force))
+//    livyClient.uploadJar(new File(ExecuteWithLivy.getSourcePath(this))).get()
+    if (condition.equalsIgnoreCase("")){
+      livyClient.submit(new CompactionJob(snapshotManagement.table_name, force))
+    }else{
+      livyClient.submit(new CompactionJobWithCondition(snapshotManagement.table_name, condition, force))
+    }
   }
 
-  def cleanup(justList: Boolean = true): Unit = {
+  def compactionWithLivy(conf: Map[String, String]): Unit = {
+    compactionWithLivy(conf, "", true)
+  }
+
+  def compactionWithLivy(conf: Map[String, String], force: Boolean): Unit = {
+    compactionWithLivy(conf, "", force)
+  }
+
+  def compactionWithLivy(conf: Map[String, String], condition: String): Unit = {
+    compactionWithLivy(conf, condition, true)
+  }
+
+  def cleanup(justList: Boolean = false): Unit = {
     executeCleanup(snapshotManagement, justList)
   }
 

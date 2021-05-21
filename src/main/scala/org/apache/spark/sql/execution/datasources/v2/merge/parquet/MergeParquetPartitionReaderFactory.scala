@@ -33,6 +33,7 @@ import org.apache.spark.sql.catalyst.util.DateTimeUtils
 import org.apache.spark.sql.connector.read.{InputPartition, PartitionReader}
 import org.apache.spark.sql.execution.datasources.parquet._
 import org.apache.spark.sql.execution.datasources.v2.merge.MergePartitionedFile
+import org.apache.spark.sql.execution.datasources.v2.merge.parquet.batch.merge_operator.MergeOperator
 import org.apache.spark.sql.execution.datasources.{DataSourceUtils, RecordReaderIterator}
 import org.apache.spark.sql.internal.SQLConf
 import org.apache.spark.sql.internal.SQLConf.LegacyBehaviorPolicy
@@ -59,7 +60,10 @@ case class MergeParquetPartitionReaderFactory(sqlConf: SQLConf,
                                               dataSchema: StructType,
                                               readDataSchema: StructType,
                                               partitionSchema: StructType,
-                                              filters: Array[Filter]) extends MergeFilePartitionReaderFactory with Logging {
+                                              filters: Array[Filter],
+                                              mergeOperatorInfo: Map[String, MergeOperator[Any]])
+  extends MergeFilePartitionReaderFactory(mergeOperatorInfo) with Logging {
+
   private val isCaseSensitive = sqlConf.caseSensitiveAnalysis
   private val resultSchema = StructType(partitionSchema.fields ++ readDataSchema.fields)
   private val enableOffHeapColumnVector = sqlConf.offHeapColumnVectorEnabled

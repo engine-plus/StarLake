@@ -26,6 +26,7 @@ import org.apache.spark.sql.execution.datasources.LogicalRelation
 import org.apache.spark.sql.sources.{BaseRelation, Filter, InsertableRelation}
 import org.apache.spark.sql.star._
 import org.apache.spark.sql.star.commands.WriteIntoTable
+import org.apache.spark.sql.star.exception.StarLakeErrors
 import org.apache.spark.sql.star.sources.{StarLakeDataSource, StarLakeSourceUtils}
 import org.apache.spark.sql.types.StructType
 import org.apache.spark.sql.util.CaseInsensitiveStringMap
@@ -38,7 +39,8 @@ case class StarLakeTableV2(spark: SparkSession,
                            path: Path,
                            catalogTable: Option[CatalogTable] = None,
                            tableIdentifier: Option[String] = None,
-                           userDefinedFileIndex: Option[StarLakeFileIndexV2] = None)
+                           userDefinedFileIndex: Option[StarLakeFileIndexV2] = None,
+                           mergeOperatorInfo: Map[String, String] = Map.empty[String, String])
   extends Table with SupportsWrite with SupportsRead {
 
   private lazy val (rootPath, partitionFilters) =
@@ -99,8 +101,25 @@ case class StarLakeTableV2(spark: SparkSession,
     V1_BATCH_WRITE, OVERWRITE_BY_FILTER, TRUNCATE
   ).asJava
 
-  override def newScanBuilder(options: CaseInsensitiveStringMap): StarLakeScanBuilder =
-    StarLakeScanBuilder(spark, fileIndex, schema(), dataSchema, options, snapshot.getTableInfo)
+  override def newScanBuilder(options: CaseInsensitiveStringMap): StarLakeScanBuilder = {
+    if (mergeOperatorInfo.nonEmpty){
+      assert(
+        snapshot.getTableInfo.hash_partition_columns.nonEmpty,
+        "Merge operator should be used with hash partitioned table")
+      val fields = schema().fieldNames
+      mergeOperatorInfo.map(_._1.replaceFirst(StarLakeUtils.MERGE_OP_COL, ""))
+        .foreach(info => {
+          if(!fields.contains(info)){
+            throw StarLakeErrors.useMergeOperatorForNonStarTableField(info)
+          }
+        })
+    }
+
+    val newOptions = options.asCaseSensitiveMap().asScala ++ mergeOperatorInfo
+
+    StarLakeScanBuilder(spark, fileIndex, schema(), dataSchema,
+      new CaseInsensitiveStringMap(newOptions.asJava), snapshot.getTableInfo)
+  }
 
   override def newWriteBuilder(info: LogicalWriteInfo): WriteBuilder = {
     new WriteIntoTableBuilder(snapshotManagement, info.options)

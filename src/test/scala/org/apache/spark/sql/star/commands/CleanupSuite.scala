@@ -18,7 +18,7 @@ package org.apache.spark.sql.star.commands
 
 import java.io.File
 
-import com.engineplus.star.tables.StarTableTestUtils
+import com.engineplus.star.tables.{StarTable, StarTableTestUtils}
 import org.apache.hadoop.fs.Path
 import org.apache.spark.sql.QueryTest
 import org.apache.spark.sql.star.SnapshotManagement
@@ -88,6 +88,40 @@ class CleanupSuite extends QueryTest
       })
     }
 
+  }
+
+  test("simple cleanup"){
+    withSQLConf(StarLakeSQLConf.OLD_VERSION_RETENTION_TIME.key -> "1") {
+      withTempDir(dir => {
+        val tablePath = dir.getCanonicalPath
+        Seq((1,1,1),(1,2,2),(2,3,3)).toDF("range","hash","value")
+          .write.mode("overwrite")
+          .format("star")
+          .option("rangePartitions","range")
+          .option("hashPartitions", "hash")
+          .option("hashBucketNum", "1")
+          .save(tablePath)
+        val snapshotManagement = SnapshotManagement(tablePath)
+        val oldFile = new Path(snapshotManagement.snapshot.allDataInfo.head.file_path).toUri
+
+        Seq((1,1,1),(1,2,2),(2,3,3)).toDF("range","hash","value")
+          .write.mode("overwrite")
+          .format("star")
+          .option("rangePartitions","range")
+          .option("hashPartitions", "hash")
+          .option("hashBucketNum", "1")
+          .save(tablePath)
+
+        val newFile = new Path(snapshotManagement.updateSnapshot().allDataInfo.head.file_path).toUri
+
+        Thread.sleep(1000)
+        StarTable.forPath(tablePath).cleanup()
+
+        assert(!new File(oldFile).exists())
+        assert(new File(newFile).exists())
+      })
+
+    }
   }
 
 }
