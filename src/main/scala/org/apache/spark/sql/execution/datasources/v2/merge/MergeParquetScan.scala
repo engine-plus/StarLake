@@ -38,6 +38,7 @@ import org.apache.spark.sql.types.StructType
 import org.apache.spark.sql.util.CaseInsensitiveStringMap
 import org.apache.spark.sql.{AnalysisException, SparkSession}
 import org.apache.spark.util.SerializableConfiguration
+import org.apache.spark.util.Utils
 
 import scala.collection.JavaConverters._
 import scala.collection.mutable.ArrayBuffer
@@ -117,7 +118,7 @@ abstract class MergeDeltaParquetScan(sparkSession: SparkSession,
         assert(allSchema.contains(realColName),
           s"merge column `$realColName` not found in [${allSchema.keys.mkString(",")}]")
 
-        val mergeClass = Class.forName(options.get(k)).getConstructors()(0)
+        val mergeClass = Class.forName(options.get(k), true, Utils.getContextOrSparkClassLoader).getConstructors()(0)
           .newInstance()
           .asInstanceOf[MergeOperator[Any]]
         (realColName, mergeClass)
@@ -126,7 +127,7 @@ abstract class MergeDeltaParquetScan(sparkSession: SparkSession,
 
     val canUseAsyncReader = tableInfo.table_name.startsWith("s3") || tableInfo.table_name.startsWith("oss")
     val asyncFactoryName = "org.apache.spark.sql.execution.datasources.v2.parquet.MergeParquetPartitionAsyncReaderFactory"
-    val (hasAsyncClass, cls) = MetaUtils.getAsyncClass(asyncFactoryName)
+    val (hasAsyncClass, cls) = StarLakeUtils.getAsyncClass(asyncFactoryName)
 
     if (canUseAsyncReader && hasAsyncClass) {
       logInfo("================  async merge scan   ==============================")

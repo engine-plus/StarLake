@@ -17,19 +17,16 @@
 package com.engineplus.star.meta
 
 import java.net.InetAddress
-import java.util
 
 import com.datastax.driver.core.ProtocolOptions
 import com.datastax.spark.connector.cql.{AuthConf, CassandraConnectionFactory, CassandraConnector, CassandraConnectorConf}
 import com.datastax.spark.connector.util.{ConfigCheck, ReflectionUtil}
 import org.apache.hadoop.fs.Path
 import org.apache.spark.internal.Logging
+import org.apache.spark.sql.SparkSession
 import org.apache.spark.sql.internal.SQLConf
 import org.apache.spark.sql.star.sources.StarLakeSQLConf
-import org.apache.spark.sql.{DataFrame, SparkSession}
-import org.yaml.snakeyaml.Yaml
 
-import scala.collection.JavaConversions._
 import scala.util.control.NonFatal
 
 
@@ -194,17 +191,6 @@ object MetaUtils extends Logging {
       partition_values = partition_values ++ Map(parts(0) -> parts(1))
     }
     partition_values
-  }
-
-  /** return async class */
-  def getAsyncClass(className: String): (Boolean, Class[_]) = {
-    try {
-      val cls = Class.forName(className)
-      (true, cls)
-    } catch {
-      case e: ClassNotFoundException => (false, null)
-      case e: Exception => throw e
-    }
   }
 
 }

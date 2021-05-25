@@ -133,7 +133,7 @@ case class StarLakeScanBuilder(sparkSession: SparkSession,
 
   def parquetScan(canUseAsyncReader: Boolean): Scan = {
     val asyncFactoryName = "org.apache.spark.sql.execution.datasources.v2.parquet.AsyncParquetScan"
-    val (hasAsyncClass, cls) = MetaUtils.getAsyncClass(asyncFactoryName)
+    val (hasAsyncClass, cls) = StarLakeUtils.getAsyncClass(asyncFactoryName)
 
     if (canUseAsyncReader && hasAsyncClass) {
       logInfo("======================  async scan   ========================")
