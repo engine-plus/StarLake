@@ -72,7 +72,7 @@ case class CompactionCommand(snapshotManagement: SnapshotManagement,
       None,
       None,
       Option(fileIndex),
-      mergeOperatorInfo
+      Option(mergeOperatorInfo)
     )
     val option = new CaseInsensitiveStringMap(
       Map("basePath" -> tc.tableInfo.table_name, "isCompaction" -> "true"))

@@ -75,6 +75,8 @@ class StarSparkSessionExtension extends (SparkSessionExtensions => Unit) {
     //    extensions.injectParser { (session, parser) =>
     //      new StarLakeSqlParser(parser)
     //    }
+
+
     extensions.injectResolutionRule { session =>
       ExtractMergeOperator(session)
     }

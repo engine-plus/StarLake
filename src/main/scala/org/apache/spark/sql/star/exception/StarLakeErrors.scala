@@ -586,6 +586,11 @@ object StarLakeErrors {
     new AnalysisException(s"${cls.toString} is not a legal merge operator class")
   }
 
+  def multiMergeOperatorException(fieldName: String): Throwable ={
+    new AnalysisException(s"Column `$fieldName` has multi merge operators, but only one merge operator can be set.")
+  }
+
+
 
 }
 
