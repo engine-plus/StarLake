@@ -255,7 +255,48 @@ object StarLakeSQLConf {
           |Using this feature, the parallelism will equal to hash bucket num.
         """.stripMargin)
       .booleanConf
+      .createWithDefault(true)
+
+  val PART_MERGE_ENABLE: ConfigEntry[Boolean] =
+    buildConf("part.merge.enable")
+      .doc(
+        """
+          |If true, part files merging will be used to avoid OOM when it has too many delta files.
+        """.stripMargin)
+      .booleanConf
       .createWithDefault(false)
+
+  val PART_MERGE_COMPACTION_COMMIT_ENABLE: ConfigEntry[Boolean] =
+    buildConf("part.merge.compaction.commit.enable")
+      .doc(
+        """
+          |If true, it will commit the compacted files into meta store, and the later reader can read faster.
+          |Note that if you read a column by self-defined merge operator, the compacted result should also use
+          |this merge operator, make sure that the result is expected or disable compaction commit.
+        """.stripMargin)
+      .booleanConf
+      .createWithDefault(false)
+
+  val PART_MERGE_FILE_MINIMUM_NUM: ConfigEntry[Int] =
+    buildConf("part.merge.file.minimum.num")
+      .doc(
+        """
+          |If delta file num more than this count, we will check for part merge.
+        """.stripMargin)
+      .intConf
+      .createWithDefault(5)
+
+
+  val PART_MERGE_FILE_SIZE_FACTOR: ConfigEntry[Double] =
+    buildConf("part.merge.file.size.factor")
+      .doc(
+        """
+          |File size factor to calculate part merge max size.
+          |Expression: PART_MERGE_FILE_MINIMUM_NUM * PART_MERGE_FILE_SIZE_FACTOR * 128M
+        """.stripMargin)
+      .doubleConf
+      .createWithDefault(1.0)
+
 
 
 }

@@ -23,7 +23,7 @@ case class PartitionInfo(table_id: String,
                          add_files: Array[DataFileInfo] = Array.empty[DataFileInfo],
                          expire_files: Array[DataFileInfo] = Array.empty[DataFileInfo],
                          last_update_timestamp: Long = -1L,
-                         delta_file_num: Int = 0,
+                         delta_file_num: Int = 0,//approximate value of delta files
                          be_compacted: Boolean = false) {
   override def toString: String = {
     s"partition info: {\ntable_name: $table_name,\nrange_value: $range_value,\nread_version: $read_version," +

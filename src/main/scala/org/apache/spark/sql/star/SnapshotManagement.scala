@@ -131,6 +131,23 @@ class SnapshotManagement(path: String) extends Logging {
   }
 
   /**
+    * using with part merge.
+    *
+    * @note This uses thread-local variable to make the active transaction visible. So do not use
+    *       multi-threaded code in the provided thunk.
+    */
+  def withNewPartMergeTransaction[T](thunk: PartMergeTransactionCommit => T): T = {
+    try {
+//      updateSnapshot()
+      val tc = new PartMergeTransactionCommit(this)
+      PartMergeTransactionCommit.setActive(tc)
+      thunk(tc)
+    } finally {
+      PartMergeTransactionCommit.clearActive()
+    }
+  }
+
+  /**
     * Checks whether this table only accepts appends. If so it will throw an error in operations that
     * can remove data such as DELETE/UPDATE/MERGE.
     */

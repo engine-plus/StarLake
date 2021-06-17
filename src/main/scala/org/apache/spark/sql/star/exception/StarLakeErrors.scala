@@ -590,6 +590,13 @@ object StarLakeErrors {
     new AnalysisException(s"Column `$fieldName` has multi merge operators, but only one merge operator can be set.")
   }
 
+  def compactionFailedWithPartMergeException(): Throwable = {
+    new MetaException("Compaction with part merging commit failed, another job may had compacted this partition.")
+  }
+
+
+
+
 
 
 }

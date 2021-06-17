@@ -32,7 +32,8 @@ import org.apache.spark.sql.execution.datasources.v2.merge.parquet.batch.merge_o
 import org.apache.spark.sql.execution.datasources.v2.merge.parquet.{MergeFilePartitionReaderFactory, MergeParquetPartitionReaderFactory}
 import org.apache.spark.sql.internal.SQLConf
 import org.apache.spark.sql.sources.Filter
-import org.apache.spark.sql.star.{StarLakeFileIndexV2, StarLakeUtils}
+import org.apache.spark.sql.star.sources.StarLakeSQLConf
+import org.apache.spark.sql.star.{BatchDataFileIndexV2, SnapshotManagement, StarLakeFileIndexV2, StarLakePartFileMerge, StarLakeUtils}
 import org.apache.spark.sql.star.utils.{DataFileInfo, TableInfo}
 import org.apache.spark.sql.types.StructType
 import org.apache.spark.sql.util.CaseInsensitiveStringMap
@@ -58,10 +59,66 @@ abstract class MergeDeltaParquetScan(sparkSession: SparkSession,
     with SupportsReportStatistics with Logging {
   def isSplittable(path: Path): Boolean = false
 
-  lazy val fileInfo: Seq[DataFileInfo] = fileIndex.getFileInfo(partitionFilters)
+  //it may has to many delta files, check if we should compact part of files first to save memory
+  lazy val newFileIndex: StarLakeFileIndexV2 = compactAndReturnNewFileIndex(fileIndex)
+
+  val snapshotManagement: SnapshotManagement = fileIndex.snapshotManagement
+
+  lazy val fileInfo: Seq[DataFileInfo] = newFileIndex.getFileInfo(partitionFilters)
     .map(f => if (f.is_base_file) {
       f.copy(write_version = 0)
     } else f)
+
+  /** if delta files are too many, we will execute compaction first*/
+  private def compactAndReturnNewFileIndex(oriFileIndex: StarLakeFileIndexV2): StarLakeFileIndexV2 ={
+    val files = oriFileIndex.getFileInfo(partitionFilters)
+      .map(f => if (f.is_base_file) {
+        f.copy(write_version = 0)
+      } else f)
+
+    val partitionGroupedFiles = files
+      .groupBy(_.range_key)
+      .values
+      .map(m => {
+        m.groupBy(_.file_bucket_id).values
+      })
+
+
+    val minimumDeltaFiles = sparkSession.sessionState.conf.getConf(StarLakeSQLConf.PART_MERGE_FILE_MINIMUM_NUM)
+    val maxFiles = if(partitionGroupedFiles.isEmpty) 0 else partitionGroupedFiles.map(m => m.map(_.length).max).max
+
+    if(minimumDeltaFiles >= maxFiles){
+      return oriFileIndex
+    }
+
+    val mergeOperatorStringInfo = options.keySet().asScala
+      .filter(_.startsWith(StarLakeUtils.MERGE_OP_COL))
+      .map(k => {
+        (k, options.get(k))
+      }).toMap
+
+    //whether this scan is compaction command or not
+    val isCompactionCommand = options.getOrDefault("isCompaction", "false").toBoolean
+
+    //compacted files + not merged files
+    val remainFiles = new ArrayBuffer[DataFileInfo]()
+
+    partitionGroupedFiles.foreach(partition => {
+      val sortedFiles = partition.map(m => m.sortBy(_.write_version))
+
+      remainFiles ++= StarLakePartFileMerge.partMergeCompaction(
+        sparkSession,
+        snapshotManagement,
+        sortedFiles,
+        mergeOperatorStringInfo,
+        isCompactionCommand)
+
+    })
+
+    BatchDataFileIndexV2(sparkSession, snapshotManagement, remainFiles)
+  }
+
+
 
   override def createReaderFactory(): PartitionReaderFactory = {
     val readDataSchemaAsJson = readDataSchema.json
@@ -165,13 +222,13 @@ abstract class MergeDeltaParquetScan(sparkSession: SparkSession,
   }
 
   protected def partitions: Seq[MergeFilePartition] = {
-    val selectedPartitions = fileIndex.listFiles(partitionFilters, dataFilters)
-    val partitionAttributes = fileIndex.partitionSchema.toAttributes
+    val selectedPartitions = newFileIndex.listFiles(partitionFilters, dataFilters)
+    val partitionAttributes = newFileIndex.partitionSchema.toAttributes
     val attributeMap = partitionAttributes.map(a => normalizeName(a.name) -> a).toMap
     val readPartitionAttributes = readPartitionSchema.map { readField =>
       attributeMap.getOrElse(normalizeName(readField.name),
         throw new AnalysisException(s"Can't find required partition column ${readField.name} " +
-          s"in partition schema ${fileIndex.partitionSchema}")
+          s"in partition schema ${newFileIndex.partitionSchema}")
       )
     }
     lazy val partitionValueProject =
@@ -253,7 +310,7 @@ abstract class MergeDeltaParquetScan(sparkSession: SparkSession,
     new Statistics {
       override def sizeInBytes(): OptionalLong = {
         val compressionFactor = sparkSession.sessionState.conf.fileCompressionFactor
-        val size = (compressionFactor * fileIndex.sizeInBytes).toLong
+        val size = (compressionFactor * newFileIndex.sizeInBytes).toLong
         OptionalLong.of(size)
       }
 
