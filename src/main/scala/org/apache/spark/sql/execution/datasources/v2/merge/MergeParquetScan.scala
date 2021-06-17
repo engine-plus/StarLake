@@ -182,7 +182,8 @@ abstract class MergeDeltaParquetScan(sparkSession: SparkSession,
       }).toMap
 
 
-    val canUseAsyncReader = tableInfo.table_name.startsWith("s3") || tableInfo.table_name.startsWith("oss")
+    val validFormat = tableInfo.table_name.startsWith("s3") || tableInfo.table_name.startsWith("oss")
+    val canUseAsyncReader = validFormat && sparkSession.sessionState.conf.getConf(StarLakeSQLConf.ASYNC_READER_ENABLE)
     val asyncFactoryName = "org.apache.spark.sql.execution.datasources.v2.parquet.MergeParquetPartitionAsyncReaderFactory"
     val (hasAsyncClass, cls) = StarLakeUtils.getAsyncClass(asyncFactoryName)
 

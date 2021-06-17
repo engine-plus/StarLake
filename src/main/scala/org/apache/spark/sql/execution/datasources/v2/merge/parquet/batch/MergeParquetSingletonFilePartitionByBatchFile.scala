@@ -54,6 +54,9 @@ class MergeParquetSingletonFilePartitionByBatchFile[T](filesInfo: Seq[Seq[(Merge
     if (mergeLogic.deDuplication()) {
       true
     } else if (filesItr.hasNext) {
+      //close current file readers
+      mergeLogic.closeReadFileReader()
+
       mergeLogic = new MergeSingletonFile(filesItr.next())
       mergeLogic.deDuplication()
     } else {

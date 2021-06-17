@@ -50,6 +50,9 @@ trait MergeLogic {
     }
   }
 
+  /** The file readers have been read should be closed at once. */
+  def closeReadFileReader(): Unit
+
 }
 
 
@@ -136,6 +139,10 @@ class MergeSingletonFile(filesInfo: Seq[(MergePartitionedFile, PartitionReader[C
     } else {
       singletonBatch.getRow(rowId)
     }
+  }
+
+  override def closeReadFileReader(): Unit = {
+    filesInfo.foreach(f => f._2.close())
   }
 
 }

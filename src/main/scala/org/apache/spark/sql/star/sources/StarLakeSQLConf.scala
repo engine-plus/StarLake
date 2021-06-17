@@ -32,7 +32,6 @@ object StarLakeSQLConf {
       .booleanConf
       .createWithDefault(false)
 
-
   val USE_DELTA_FILE: ConfigEntry[Boolean] =
     buildConf("deltaFile.enabled")
       .doc("If true, enables delta files on specific scene(e.g. upsert).")
@@ -297,6 +296,14 @@ object StarLakeSQLConf {
       .doubleConf
       .createWithDefault(1.0)
 
+  val ASYNC_READER_ENABLE: ConfigEntry[Boolean] =
+    buildConf("async.reader.enable")
+      .doc(
+        """
+          |Whether async reader can be used.
+        """.stripMargin)
+      .booleanConf
+      .createWithDefault(true)
 
 
 }

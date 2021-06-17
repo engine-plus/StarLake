@@ -286,4 +286,9 @@ class MergeMultiFileWithOperator(filesInfo: Seq[(MergePartitionedFile, Partition
     }
   }
 
+  override def closeReadFileReader(): Unit = {
+    filesInfo.foreach(f => f._2.close())
+  }
+
+
 }
