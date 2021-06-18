@@ -254,7 +254,7 @@ object StarLakeSQLConf {
           |Using this feature, the parallelism will equal to hash bucket num.
         """.stripMargin)
       .booleanConf
-      .createWithDefault(true)
+      .createWithDefault(false)
 
   val PART_MERGE_ENABLE: ConfigEntry[Boolean] =
     buildConf("part.merge.enable")
