@@ -47,7 +47,7 @@ object CustomConnectionFactory extends CassandraConnectionFactory {
       .withCredentials(MetaUtils.META_USERNAME, MetaUtils.META_PASSWORD)
       .withCompression(ProtocolOptions.Compression.LZ4)
       .withQueryOptions(new QueryOptions()
-        .setConsistencyLevel(ConsistencyLevel.ONE)
+        .setConsistencyLevel(ConsistencyLevel.ALL)
         .setSerialConsistencyLevel(ConsistencyLevel.SERIAL))
       .withLoadBalancingPolicy(new TokenAwarePolicy(new RoundRobinPolicy()))
   }
