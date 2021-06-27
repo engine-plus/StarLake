@@ -29,7 +29,9 @@ class StarLakePartFileMergeSuite extends QueryTest
 
   test("simple part merge when there are to many delta files"){
     withTempDir(dir => {
-      withSQLConf(StarLakeSQLConf.PART_MERGE_COMPACTION_COMMIT_ENABLE.key -> "true",
+      withSQLConf(
+        StarLakeSQLConf.PART_MERGE_ENABLE.key -> "true",
+        StarLakeSQLConf.PART_MERGE_COMPACTION_COMMIT_ENABLE.key -> "true",
         StarLakeSQLConf.PART_MERGE_FILE_SIZE_FACTOR.key -> "0.0000001",
         StarLakeSQLConf.PART_MERGE_FILE_MINIMUM_NUM.key -> "3"){
 
@@ -82,7 +84,9 @@ class StarLakePartFileMergeSuite extends QueryTest
 
   test("part merge with merge operator"){
     withTempDir(dir => {
-      withSQLConf(StarLakeSQLConf.PART_MERGE_COMPACTION_COMMIT_ENABLE.key -> "true",
+      withSQLConf(
+        StarLakeSQLConf.PART_MERGE_ENABLE.key -> "true",
+        StarLakeSQLConf.PART_MERGE_COMPACTION_COMMIT_ENABLE.key -> "true",
         StarLakeSQLConf.PART_MERGE_FILE_SIZE_FACTOR.key -> "0.0000001",
         StarLakeSQLConf.PART_MERGE_FILE_MINIMUM_NUM.key -> "2"){
 
@@ -147,7 +151,9 @@ class StarLakePartFileMergeSuite extends QueryTest
 
   test("compaction with part merge"){
     withTempDir(dir => {
-      withSQLConf(StarLakeSQLConf.PART_MERGE_COMPACTION_COMMIT_ENABLE.key -> "true",
+      withSQLConf(
+        StarLakeSQLConf.PART_MERGE_ENABLE.key -> "true",
+        StarLakeSQLConf.PART_MERGE_COMPACTION_COMMIT_ENABLE.key -> "true",
         StarLakeSQLConf.PART_MERGE_FILE_SIZE_FACTOR.key -> "0.0000001",
         StarLakeSQLConf.PART_MERGE_FILE_MINIMUM_NUM.key -> "3"){
 

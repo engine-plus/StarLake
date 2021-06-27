@@ -83,11 +83,14 @@ abstract class MergeDeltaParquetScan(sparkSession: SparkSession,
         m.groupBy(_.file_bucket_id).values
       })
 
-
-    val minimumDeltaFiles = sparkSession.sessionState.conf.getConf(StarLakeSQLConf.PART_MERGE_FILE_MINIMUM_NUM)
+    val sessionConf = sparkSession.sessionState.conf
+    val minimumDeltaFiles = sessionConf.getConf(StarLakeSQLConf.PART_MERGE_FILE_MINIMUM_NUM)
     val maxFiles = if(partitionGroupedFiles.isEmpty) 0 else partitionGroupedFiles.map(m => m.map(_.length).max).max
 
-    if(minimumDeltaFiles >= maxFiles){
+    if(minimumDeltaFiles >= maxFiles || !sessionConf.getConf(StarLakeSQLConf.PART_MERGE_ENABLE)){
+
+      println("==checkflag: MergeDeltaParquetScan compactAndReturnNewFileIndex return...")
+
       return oriFileIndex
     }
 
@@ -128,9 +131,9 @@ abstract class MergeDeltaParquetScan(sparkSession: SparkSession,
       fileInfo
         .groupBy(_.range_version)
         .map(m => {
+          val fileExistCols = m._2.head.file_exist_cols.split(",")
           m._1 + "->" + StructType(
-            (tableInfo.hash_partition_columns ++ m._2.head.file_exist_cols.split(","))
-              .filter(requestedFields.contains)
+            requestedFields.filter(f => fileExistCols.contains(f) || tableInfo.hash_partition_columns.contains(f))
               .map(c => tableInfo.schema(c))
           ).json
         }).mkString("|")
@@ -247,9 +250,9 @@ abstract class MergeDeltaParquetScan(sparkSession: SparkSession,
       val requestFilesSchemaMap = fileInfo
         .groupBy(_.range_version)
         .map(m => {
+          val fileExistCols = m._2.head.file_exist_cols.split(",")
           (m._1, StructType(
-            (tableInfo.hash_partition_columns ++ m._2.head.file_exist_cols.split(","))
-              .filter(requestedFields.contains)
+            requestedFields.filter(f => fileExistCols.contains(f) || tableInfo.hash_partition_columns.contains(f))
               .map(c => tableInfo.schema(c))
           ))
         })

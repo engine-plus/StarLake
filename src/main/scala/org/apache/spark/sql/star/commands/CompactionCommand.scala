@@ -109,7 +109,7 @@ case class CompactionCommand(snapshotManagement: SnapshotManagement,
 
     tc.setReadFiles(newReadFiles)
     tc.setCommitType("compaction")
-    val newFiles = tc.writeFiles(compactDF)
+    val newFiles = tc.writeFiles(compactDF, isCompaction = true)
     tc.commit(newFiles, newReadFiles)
 
     logInfo("=========== Compaction Success!!! ===========")

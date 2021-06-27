@@ -64,7 +64,13 @@ case class SetPartitionAndOrdering(session: SparkSession)
 
       val batchExec = BatchScanExec(relation.output, relation.scan)
       val child = withProjectAndFilter(project, filters, batchExec, !batchExec.supportsColumnar)
-      withPartitionAndOrdering(outputPartitioning, outputOrdering, child) :: Nil
+
+      if(hashKeys.forall(key => child.output.contains(key.toAttribute))){
+        withPartitionAndOrdering(outputPartitioning, outputOrdering, child) :: Nil
+      }else{
+        child :: Nil
+      }
+//      withPartitionAndOrdering(outputPartitioning, outputOrdering, child) :: Nil
 
     case PhysicalOperation(project, filters,
     relation @ DataSourceV2ScanRelation(
@@ -100,7 +106,11 @@ case class SetPartitionAndOrdering(session: SparkSession)
         withProjectAndFilter(project, filters, batchExec, !batchExec.supportsColumnar)
       }
 
-      withPartitionAndOrdering(outputPartitioning, outputOrdering, child) :: Nil
+      if(hashKeys.forall(key => child.output.contains(key.toAttribute))){
+        withPartitionAndOrdering(outputPartitioning, outputOrdering, child) :: Nil
+      }else{
+        child :: Nil
+      }
 
     case PhysicalOperation(project, filters,
     relation @ DataSourceV2ScanRelation(
@@ -117,7 +127,12 @@ case class SetPartitionAndOrdering(session: SparkSession)
 
       val batchExec = BatchScanExec(relation.output, relation.scan)
       val child = withProjectAndFilter(project, filters, batchExec, !batchExec.supportsColumnar)
-      withPartition(outputPartitioning, child) :: Nil
+
+      if(hashKeys.forall(key => child.output.contains(key.toAttribute))){
+        withPartition(outputPartitioning, child) :: Nil
+      }else{
+        child :: Nil
+      }
 
     case _ => Nil
   }

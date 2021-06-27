@@ -94,14 +94,15 @@ trait TransactionalWrite {
     rangePartitionColumns
   }
 
-  def writeFiles(data: Dataset[_]): Seq[DataFileInfo] = writeFiles(data, None, isOptimize = false)
+  def writeFiles(data: Dataset[_]): Seq[DataFileInfo] = writeFiles(data, None, isCompaction = false)
 
   def writeFiles(data: Dataset[_], writeOptions: Option[StarLakeOptions]): Seq[DataFileInfo] =
-    writeFiles(data, writeOptions, isOptimize = false)
+    writeFiles(data, writeOptions, isCompaction = false)
 
-  def writeFiles(data: Dataset[_], isOptimize: Boolean): Seq[DataFileInfo] =
-    writeFiles(data, None, isOptimize = isOptimize)
+  def writeFiles(data: Dataset[_], isCompaction: Boolean): Seq[DataFileInfo] =
+    writeFiles(data, None, isCompaction = isCompaction)
 
+//  def writeFiles(data: Dataset[_], isCompaction: Boolean): Seq[DataFileInfo] = writeFiles(data, None, isOptimize = false, isCompaction = false)
 
   /**
     * Writes out the dataframe after performing schema validation. Returns a list of
@@ -109,7 +110,7 @@ trait TransactionalWrite {
     */
   def writeFiles(oriData: Dataset[_],
                  writeOptions: Option[StarLakeOptions],
-                 isOptimize: Boolean): Seq[DataFileInfo] = {
+                 isCompaction: Boolean): Seq[DataFileInfo] = {
     val data = if (tableInfo.hash_partition_columns.nonEmpty) {
       oriData.repartition(tableInfo.bucket_num, tableInfo.hash_partition_columns.map(col): _*)
     } else {
@@ -153,7 +154,11 @@ trait TransactionalWrite {
         Map.empty,
         output)
 
-      val physicalPlan = InvariantCheckerExec(queryExecution.executedPlan, invariants)
+      val physicalPlan = if(isCompaction){
+        queryExecution.executedPlan
+      }else{
+        InvariantCheckerExec(queryExecution.executedPlan, invariants)
+      }
 
       val statsTrackers: ListBuffer[WriteJobStatsTracker] = ListBuffer()
 
@@ -199,7 +204,7 @@ trait TransactionalWrite {
       false
     }
 
-    val partitionCols = tableInfo.partition_cols
+    val partitionCols = tableInfo.range_partition_columns
     //Returns the absolute path to the file
     val real_write_cols = data.schema.fieldNames.filter(!partitionCols.contains(_)).mkString(",")
     committer.addedStatuses.map(file => file.copy(

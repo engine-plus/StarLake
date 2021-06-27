@@ -134,7 +134,7 @@ object StarLakePartFileMerge {
     pmtc.setReadFiles(files)
     pmtc.setCommitType("part_compaction")
 
-    val newFiles = pmtc.writeFiles(compactDF)
+    val newFiles = pmtc.writeFiles(compactDF, isCompaction = true)
 
     //if part compaction failed before, it will not commit later
     var flag = commitFlag

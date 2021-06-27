@@ -88,9 +88,9 @@ case class StarLakeScanBuilder(sparkSession: SparkSession,
   // All filters that can be converted to Parquet are pushed down.
   override def pushedFilters: Array[Filter] = pushedParquetFilters
 
-  //note: hash partition columns must be first
+  //note: hash partition columns must be last
   def mergeReadDataSchema(): StructType = {
-    StructType((tableInfo.hash_partition_schema ++ readDataSchema()).distinct)
+    StructType((readDataSchema() ++ tableInfo.hash_partition_schema).distinct)
   }
 
   override def build(): Scan = {
