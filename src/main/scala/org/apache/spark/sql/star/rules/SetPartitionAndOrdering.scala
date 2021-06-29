@@ -70,7 +70,6 @@ case class SetPartitionAndOrdering(session: SparkSession)
       }else{
         child :: Nil
       }
-//      withPartitionAndOrdering(outputPartitioning, outputOrdering, child) :: Nil
 
     case PhysicalOperation(project, filters,
     relation @ DataSourceV2ScanRelation(

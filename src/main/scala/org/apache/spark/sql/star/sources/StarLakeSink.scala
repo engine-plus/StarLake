@@ -18,6 +18,7 @@ package org.apache.spark.sql.star.sources
 
 import com.engineplus.star.meta.StreamingRecord
 import org.apache.hadoop.fs.Path
+import org.apache.spark.MapOutputTrackerMaster
 import org.apache.spark.sql.execution.streaming.{Sink, StreamExecution}
 import org.apache.spark.sql.star.exception.StarLakeErrors
 import org.apache.spark.sql.star.schema.{ImplicitMetadataOperation, SchemaUtils}
@@ -81,6 +82,13 @@ class StarLakeSink(sqlContext: SQLContext,
       val newFiles = tc.writeFiles(data, Some(options))
 
       tc.commit(newFiles, deletedFiles, queryId, batchId)
+
+      //clean shuffle data
+      val map = sqlContext.sparkContext.env.mapOutputTracker.asInstanceOf[MapOutputTrackerMaster].shuffleStatuses
+      map.keys.foreach(shuffleId => {
+        sqlContext.sparkContext.cleaner.get.doCleanupShuffle(shuffleId, blocking = true)
+      })
+
     })
 
   override def toString: String = s"StarSink[${snapshotManagement.table_name}]"

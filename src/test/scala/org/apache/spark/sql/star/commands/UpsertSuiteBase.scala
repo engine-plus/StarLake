@@ -625,7 +625,7 @@ class UpsertSuiteBase extends QueryTest
   })
 
 
-  test("create table with hash key mid"){
+  test("create table with hash key disordered"){
     withTempDir(dir => {
       val tablePath = dir.getAbsolutePath
       val df1 = Seq(("range", "a1",1, "a2","a"),("range","b1",2, "b2","b"),("range","c1",3, "c2","c"))

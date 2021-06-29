@@ -102,8 +102,6 @@ trait TransactionalWrite {
   def writeFiles(data: Dataset[_], isCompaction: Boolean): Seq[DataFileInfo] =
     writeFiles(data, None, isCompaction = isCompaction)
 
-//  def writeFiles(data: Dataset[_], isCompaction: Boolean): Seq[DataFileInfo] = writeFiles(data, None, isOptimize = false, isCompaction = false)
-
   /**
     * Writes out the dataframe after performing schema validation. Returns a list of
     * actions to append these files to the reservoir.
