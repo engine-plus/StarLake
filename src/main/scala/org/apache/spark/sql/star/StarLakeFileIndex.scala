@@ -256,8 +256,6 @@ abstract class StarLakeFileIndexV2(val spark: SparkSession,
                          dataFilters: Seq[Expression]): Seq[PartitionDirectory] = {
     val timeZone = spark.sessionState.conf.sessionLocalTimeZone
 
-    snapshotManagement.updateSnapshot()
-
     matchingFiles(partitionFilters, dataFilters)
       .groupBy(_.range_partitions).map {
       case (partitionValues, files) =>

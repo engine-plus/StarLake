@@ -17,13 +17,16 @@
 package org.apache.spark.sql.star
 
 import java.io.File
+import java.util.concurrent.TimeUnit
 import java.util.concurrent.locks.ReentrantLock
 
 import com.engineplus.star.meta.{MetaUtils, MetaVersion}
+import com.google.common.cache.CacheBuilder
 import org.apache.hadoop.fs.Path
 import org.apache.spark.internal.Logging
 import org.apache.spark.sql.catalyst.TableIdentifier
 import org.apache.spark.sql.catalyst.expressions.Expression
+import org.apache.spark.sql.catalyst.plans.logical.AnalysisHelper
 import org.apache.spark.sql.execution.datasources.v2.DataSourceV2ScanRelation
 import org.apache.spark.sql.execution.datasources.{HadoopFsRelation, LogicalRelation}
 import org.apache.spark.sql.functions._
@@ -121,8 +124,7 @@ class SnapshotManagement(path: String) extends Logging {
     */
   def withNewTransaction[T](thunk: TransactionCommit => T): T = {
     try {
-      updateSnapshot()
-      val tc = new TransactionCommit(this)
+      val tc = startTransaction()
       TransactionCommit.setActive(tc)
       thunk(tc)
     } finally {
@@ -138,7 +140,7 @@ class SnapshotManagement(path: String) extends Logging {
     */
   def withNewPartMergeTransaction[T](thunk: PartMergeTransactionCommit => T): T = {
     try {
-//      updateSnapshot()
+      //      updateSnapshot()
       val tc = new PartMergeTransactionCommit(this)
       PartMergeTransactionCommit.setActive(tc)
       thunk(tc)
@@ -224,9 +226,16 @@ case class GroupFiles(key: (Map[String, String], Int), dataFiles: Seq[DataFileIn
 
 object SnapshotManagement {
 
-  def apply(path: String): SnapshotManagement = new SnapshotManagement(path)
+  /**
+    * We create only a single [[SnapshotManagement]] for any given path to avoid wasted work
+    * in reconstructing.
+    */
+  private val snapshotManagementCache = {
+    val builder = CacheBuilder.newBuilder()
+      .expireAfterAccess(60, TimeUnit.MINUTES)
 
-  def apply(path: Path): SnapshotManagement = new SnapshotManagement(path.toString)
+    builder.maximumSize(5).build[String, SnapshotManagement]()
+  }
 
   def forTable(spark: SparkSession, tableName: TableIdentifier): SnapshotManagement = {
     val catalog = spark.sessionState.catalog
@@ -237,5 +246,32 @@ object SnapshotManagement {
   def forTable(dataPath: File): SnapshotManagement = {
     apply(new Path(dataPath.getAbsolutePath))
   }
+
+  def apply(path: Path): SnapshotManagement = apply(path.toString)
+
+  def apply(path: String): SnapshotManagement = {
+    val table_path: String = MetaUtils.modifyTableString(path)
+    try {
+      snapshotManagementCache.get(table_path, () => {
+        AnalysisHelper.allowInvokingTransformsInAnalyzer {
+          new SnapshotManagement(table_path)
+        }
+      })
+    } catch {
+      case e: com.google.common.util.concurrent.UncheckedExecutionException =>
+        throw e.getCause
+    }
+  }
+
+
+  def invalidateCache(path: String): Unit = {
+    val table_path: String = MetaUtils.modifyTableString(path)
+    snapshotManagementCache.invalidate(table_path)
+  }
+
+  def clearCache(): Unit = {
+    snapshotManagementCache.invalidateAll()
+  }
+
 
 }

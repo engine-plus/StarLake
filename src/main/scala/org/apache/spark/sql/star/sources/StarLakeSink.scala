@@ -56,7 +56,7 @@ class StarLakeSink(sqlContext: SQLContext,
       }
 
       val tableInfo = tc.tableInfo
-      if(StreamingRecord.getBatchId(tableInfo.table_id, queryId) >= batchId){
+      if (StreamingRecord.getBatchId(tableInfo.table_id, queryId) >= batchId) {
         logInfo(s"== Skipping already complete batch $batchId, in query $queryId")
         return
       }
@@ -86,7 +86,7 @@ class StarLakeSink(sqlContext: SQLContext,
       //clean shuffle data
       val map = sqlContext.sparkContext.env.mapOutputTracker.asInstanceOf[MapOutputTrackerMaster].shuffleStatuses
       map.keys.foreach(shuffleId => {
-        sqlContext.sparkContext.cleaner.get.doCleanupShuffle(shuffleId, blocking = true)
+        sqlContext.sparkContext.cleaner.get.doCleanupShuffle(shuffleId, blocking = false)
       })
 
     })

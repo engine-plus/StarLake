@@ -20,13 +20,13 @@ import com.engineplus.star.tables.StarTable
 import org.apache.spark.sql.QueryTest
 import org.apache.spark.sql.functions.{col, last}
 import org.apache.spark.sql.star.sources.StarLakeSQLConf
-import org.apache.spark.sql.star.test.{StarLakeTestUtils, TestUtils}
+import org.apache.spark.sql.star.test.{StarLakeSQLCommandTest, TestUtils}
 import org.apache.spark.sql.test.SharedSparkSession
 import org.scalatest.BeforeAndAfterEach
 
 class ParquetScanSuite extends QueryTest
   with SharedSparkSession with BeforeAndAfterEach
-  with StarLakeTestUtils {
+  with StarLakeSQLCommandTest {
 
   import testImplicits._
 
@@ -257,9 +257,11 @@ class ParquetScanSuite extends QueryTest
             .save(table2)
 
           StarTable.forPath(table1).toDF.createOrReplaceTempView("t1")
-          StarTable.forPath(table2).toDF.createOrReplaceTempView("t2")
+          StarTable.forPath(table2).toDF
+            .filter("range>20201100 and range<20201105")
+            .createOrReplaceTempView("t2")
 
-          val plan = spark.sql(
+          val plan1 = spark.sql(
             """
               |select t1.range,t1.hash,t1.value,t2.range,t2.hash,t2.value
               |from t1 join t2 on t1.hash=t2.hash
@@ -267,8 +269,21 @@ class ParquetScanSuite extends QueryTest
             .queryExecution
             .toString()
 
-          logInfo(plan)
-          assert(!plan.contains("Exchange"))
+          logInfo(plan1)
+          assert(!plan1.contains("Exchange"))
+
+          val plan2 = spark.sql(
+            s"""
+               |select t1.value,t2.value
+               |from t1 join
+               |(select * from star.`$table2` where range>20201100 and range<20201105) t2
+               |on t1.hash=t2.hash
+            """.stripMargin)
+            .queryExecution
+            .toString()
+
+          logInfo(plan2)
+          assert(!plan2.contains("Exchange"))
 
         })
       })

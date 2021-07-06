@@ -32,7 +32,7 @@ import scala.collection.JavaConverters._
 
 // These tests are copied from Apache Spark (minus partition by expressions) and should work exactly
 // the same with Star minus some writer options
-trait OpenSourceDataFrameWriterV2Tests
+trait DataFrameWriterV2Tests
   extends QueryTest
     with SharedSparkSession
     with BeforeAndAfter {
@@ -410,7 +410,7 @@ trait OpenSourceDataFrameWriterV2Tests
 }
 
 class DataFrameWriterV2Suite
-  extends OpenSourceDataFrameWriterV2Tests
+  extends DataFrameWriterV2Tests
     with StarLakeSQLCommandTest {
 
   import testImplicits._

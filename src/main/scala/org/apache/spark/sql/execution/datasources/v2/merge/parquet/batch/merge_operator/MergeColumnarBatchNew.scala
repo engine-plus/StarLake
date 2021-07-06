@@ -19,22 +19,15 @@ package org.apache.spark.sql.execution.datasources.v2.merge.parquet.batch.merge_
 import org.apache.spark.sql.catalyst.InternalRow
 import org.apache.spark.sql.execution.datasources.v2.merge.parquet.batch.MergeOperatorColumnarBatchRow
 import org.apache.spark.sql.types.DataType
-import org.apache.spark.sql.vectorized.{ColumnVector, ColumnarBatch}
+import org.apache.spark.sql.vectorized.ColumnVector
 
 class MergeColumnarBatchNew(columns: Array[ColumnVector],
                             mergeOps: Seq[MergeOperator[Any]],
-                            indexTypeArray: Seq[(Int, DataType)]) extends AutoCloseable{
+                            indexTypeArray: Seq[(Int, DataType)]) extends AutoCloseable {
 
   val row = new MergeOperatorColumnarBatchRow(columns, mergeOps, indexTypeArray)
 
-  def updateBatch(mergeColumns: ColumnarBatch, updateIndex: Seq[Int]): Unit ={
-    updateIndex.indices.foreach(i => {
-      columns(updateIndex(i)) = mergeColumns.column(i)
-    })
-    row.updateColumns(mergeColumns, updateIndex)
-  }
-
-  def getRow(resultScheme: Seq[Seq[(Int, Int)]]): InternalRow ={
+  def getRow(resultScheme: Seq[Seq[(Int, Int)]]): InternalRow = {
     row.idMix = resultScheme
     row.mergeValues()
     row
@@ -47,11 +40,10 @@ class MergeColumnarBatchNew(columns: Array[ColumnVector],
   }
 
   override def close(): Unit = {
-    for(c <- columns){
+    for (c <- columns) {
       c.close()
     }
   }
-
 
 
 }

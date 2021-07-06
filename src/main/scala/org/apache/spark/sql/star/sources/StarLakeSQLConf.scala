@@ -274,7 +274,7 @@ object StarLakeSQLConf {
           |this merge operator, make sure that the result is expected or disable compaction commit.
         """.stripMargin)
       .booleanConf
-      .createWithDefault(false)
+      .createWithDefault(true)
 
   val PART_MERGE_FILE_MINIMUM_NUM: ConfigEntry[Int] =
     buildConf("part.merge.file.minimum.num")
@@ -294,7 +294,7 @@ object StarLakeSQLConf {
           |Expression: PART_MERGE_FILE_MINIMUM_NUM * PART_MERGE_FILE_SIZE_FACTOR * 128M
         """.stripMargin)
       .doubleConf
-      .createWithDefault(1.0)
+      .createWithDefault(0.1)
 
   val ASYNC_READER_ENABLE: ConfigEntry[Boolean] =
     buildConf("async.reader.enable")

@@ -62,7 +62,7 @@ case class StarLakeTableV2(spark: SparkSession,
     .orElse(tableIdentifier)
     .getOrElse(s"star.`${snapshotManagement.table_name}`")
 
-  private lazy val snapshot: Snapshot = snapshotManagement.updateSnapshot()
+  private lazy val snapshot: Snapshot = snapshotManagement.snapshot
 
   override def schema(): StructType =
     StructType(snapshot.getTableInfo.data_schema ++ snapshot.getTableInfo.range_partition_schema)
@@ -102,14 +102,14 @@ case class StarLakeTableV2(spark: SparkSession,
   ).asJava
 
   override def newScanBuilder(options: CaseInsensitiveStringMap): StarLakeScanBuilder = {
-    if (mergeOperatorInfo.getOrElse(Map.empty[String, String]).nonEmpty){
+    if (mergeOperatorInfo.getOrElse(Map.empty[String, String]).nonEmpty) {
       assert(
         snapshot.getTableInfo.hash_partition_columns.nonEmpty,
         "Merge operator should be used with hash partitioned table")
       val fields = schema().fieldNames
       mergeOperatorInfo.get.map(_._1.replaceFirst(StarLakeUtils.MERGE_OP_COL, ""))
         .foreach(info => {
-          if(!fields.contains(info)){
+          if (!fields.contains(info)) {
             throw StarLakeErrors.useMergeOperatorForNonStarTableField(info)
           }
         })

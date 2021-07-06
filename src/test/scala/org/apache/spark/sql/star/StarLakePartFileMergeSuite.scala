@@ -18,34 +18,35 @@ package org.apache.spark.sql.star
 
 import com.engineplus.star.tables.StarTable
 import org.apache.spark.sql.QueryTest
-import org.apache.spark.sql.star.sources.StarLakeSQLConf
-import org.apache.spark.sql.star.test.{MergeOpInt, MergeOpString, MergeOpString02, StarLakeTestUtils}
 import org.apache.spark.sql.functions._
+import org.apache.spark.sql.star.sources.StarLakeSQLConf
+import org.apache.spark.sql.star.test.{MergeOpInt, MergeOpString02, StarLakeTestUtils}
 import org.apache.spark.sql.test.SharedSparkSession
 
 class StarLakePartFileMergeSuite extends QueryTest
   with SharedSparkSession with StarLakeTestUtils {
+
   import testImplicits._
 
-  test("simple part merge when there are to many delta files"){
+  test("simple part merge when there are to many delta files") {
     withTempDir(dir => {
       withSQLConf(
         StarLakeSQLConf.PART_MERGE_ENABLE.key -> "true",
         StarLakeSQLConf.PART_MERGE_COMPACTION_COMMIT_ENABLE.key -> "true",
         StarLakeSQLConf.PART_MERGE_FILE_SIZE_FACTOR.key -> "0.0000001",
-        StarLakeSQLConf.PART_MERGE_FILE_MINIMUM_NUM.key -> "3"){
+        StarLakeSQLConf.PART_MERGE_FILE_MINIMUM_NUM.key -> "3") {
 
         val tablePath = dir.getCanonicalPath
 
-        val data1 = Seq(("range1","hash1","value1"),("range1","hash2","value2"),("range1","hash3","value3"))
+        val data1 = Seq(("range1", "hash1", "value1"), ("range1", "hash2", "value2"), ("range1", "hash3", "value3"))
           .toDF("range", "hash", "value")
-        val data2 = Seq(("range1","hash1","value1"),("range1","hash2","value2"),("range1","hash3","value3"))
+        val data2 = Seq(("range1", "hash1", "value1"), ("range1", "hash2", "value2"), ("range1", "hash3", "value3"))
           .toDF("range", "hash", "value")
-        val data3 = Seq(("range1","hash1","value1"),("range1","hash2","value21"),("range1","hash3","value31"))
+        val data3 = Seq(("range1", "hash1", "value1"), ("range1", "hash2", "value21"), ("range1", "hash3", "value31"))
           .toDF("range", "hash", "value")
-        val data4 = Seq(("range1","hash1","value1"),("range1","hash2","value2"),("range1","hash3","value3"))
+        val data4 = Seq(("range1", "hash1", "value1"), ("range1", "hash2", "value2"), ("range1", "hash3", "value3"))
           .toDF("range", "hash", "value")
-        val data5 = Seq(("range1","hash1","value1"),("range1","hash2","value22"),("range1","hash3","value33"))
+        val data5 = Seq(("range1", "hash1", "value1"), ("range1", "hash2", "value22"), ("range1", "hash3", "value33"))
           .toDF("range", "hash", "value")
 
         data1.write
@@ -67,8 +68,8 @@ class StarLakePartFileMergeSuite extends QueryTest
         val oriDeltaNum = partitionInfo.delta_file_num
         val oriReadVersion = partitionInfo.read_version
 
-        checkAnswer(table.toDF.select("range","hash", "value"),
-          Seq(("range1","hash1","value1"),("range1","hash2","value22"),("range1","hash3","value33"))
+        checkAnswer(table.toDF.select("range", "hash", "value"),
+          Seq(("range1", "hash1", "value1"), ("range1", "hash2", "value22"), ("range1", "hash3", "value33"))
             .toDF("range", "hash", "value"))
         partitionInfo = snapshotManagement.updateSnapshot().getPartitionInfoArray.head
 
@@ -82,25 +83,25 @@ class StarLakePartFileMergeSuite extends QueryTest
     })
   }
 
-  test("part merge with merge operator"){
+  test("part merge with merge operator") {
     withTempDir(dir => {
       withSQLConf(
         StarLakeSQLConf.PART_MERGE_ENABLE.key -> "true",
         StarLakeSQLConf.PART_MERGE_COMPACTION_COMMIT_ENABLE.key -> "true",
         StarLakeSQLConf.PART_MERGE_FILE_SIZE_FACTOR.key -> "0.0000001",
-        StarLakeSQLConf.PART_MERGE_FILE_MINIMUM_NUM.key -> "2"){
+        StarLakeSQLConf.PART_MERGE_FILE_MINIMUM_NUM.key -> "2") {
 
         val tablePath = dir.getCanonicalPath
 
-        val data1 = Seq(("range1","hash1","a1",1),("range1","hash2","a2",2),("range1","hash3","a3",3))
+        val data1 = Seq(("range1", "hash1", "a1", 1), ("range1", "hash2", "a2", 2), ("range1", "hash3", "a3", 3))
           .toDF("range", "hash", "value1", "value2")
-        val data2 = Seq(("range1","hash1","b1",11),("range1","hash2","b2",22),("range1","hash3","b3",33))
+        val data2 = Seq(("range1", "hash1", "b1", 11), ("range1", "hash2", "b2", 22), ("range1", "hash3", "b3", 33))
           .toDF("range", "hash", "value1", "value2")
-        val data3 = Seq(("range1","hash1","c1",111),("range1","hash2","c2",222),("range1","hash3","c3",333))
+        val data3 = Seq(("range1", "hash1", "c1", 111), ("range1", "hash2", "c2", 222), ("range1", "hash3", "c3", 333))
           .toDF("range", "hash", "value1", "value2")
-        val data4 = Seq(("range1","hash1","d1",1111),("range1","hash2","d2",2222),("range1","hash3","d3",3333))
+        val data4 = Seq(("range1", "hash1", "d1", 1111), ("range1", "hash2", "d2", 2222), ("range1", "hash3", "d3", 3333))
           .toDF("range", "hash", "value1", "value2")
-        val data5 = Seq(("range1","hash1","e1",11111),("range1","hash2","e2",22222),("range1","hash3","e3",33333))
+        val data5 = Seq(("range1", "hash1", "e1", 11111), ("range1", "hash2", "e2", 22222), ("range1", "hash3", "e3", 33333))
           .toDF("range", "hash", "value1", "value2")
 
         data1.write
@@ -132,9 +133,9 @@ class StarLakePartFileMergeSuite extends QueryTest
           expr("stringOP(value1) as value1"),
           expr("intOp(value2) as value2")),
           Seq(
-            ("range1","hash1","a1;b1;c1;d1;e1",12345),
-            ("range1","hash2","a2;b2;c2;d2;e2",24690),
-            ("range1","hash3","a3;b3;c3;d3;e3",37035))
+            ("range1", "hash1", "a1;b1;c1;d1;e1", 12345),
+            ("range1", "hash2", "a2;b2;c2;d2;e2", 24690),
+            ("range1", "hash3", "a3;b3;c3;d3;e3", 37035))
             .toDF("range", "hash", "value1", "value2"))
 
         partitionInfo = snapshotManagement.updateSnapshot().getPartitionInfoArray.head
@@ -149,25 +150,25 @@ class StarLakePartFileMergeSuite extends QueryTest
     })
   }
 
-  test("compaction with part merge"){
+  test("compaction with part merge") {
     withTempDir(dir => {
       withSQLConf(
         StarLakeSQLConf.PART_MERGE_ENABLE.key -> "true",
         StarLakeSQLConf.PART_MERGE_COMPACTION_COMMIT_ENABLE.key -> "true",
         StarLakeSQLConf.PART_MERGE_FILE_SIZE_FACTOR.key -> "0.0000001",
-        StarLakeSQLConf.PART_MERGE_FILE_MINIMUM_NUM.key -> "3"){
+        StarLakeSQLConf.PART_MERGE_FILE_MINIMUM_NUM.key -> "3") {
 
         val tablePath = dir.getCanonicalPath
 
-        val data1 = Seq(("range1","hash1","a1",1),("range1","hash2","a2",2),("range1","hash3","a3",3))
+        val data1 = Seq(("range1", "hash1", "a1", 1), ("range1", "hash2", "a2", 2), ("range1", "hash3", "a3", 3))
           .toDF("range", "hash", "value1", "value2")
-        val data2 = Seq(("range1","hash1","b1",11),("range1","hash2","b2",22),("range1","hash3","b3",33))
+        val data2 = Seq(("range1", "hash1", "b1", 11), ("range1", "hash2", "b2", 22), ("range1", "hash3", "b3", 33))
           .toDF("range", "hash", "value1", "value2")
-        val data3 = Seq(("range1","hash1","c1",111),("range1","hash2","c2",222),("range1","hash3","c3",333))
+        val data3 = Seq(("range1", "hash1", "c1", 111), ("range1", "hash2", "c2", 222), ("range1", "hash3", "c3", 333))
           .toDF("range", "hash", "value1", "value2")
-        val data4 = Seq(("range1","hash1","d1",1111),("range1","hash2","d2",2222),("range1","hash3","d3",3333))
+        val data4 = Seq(("range1", "hash1", "d1", 1111), ("range1", "hash2", "d2", 2222), ("range1", "hash3", "d3", 3333))
           .toDF("range", "hash", "value1", "value2")
-        val data5 = Seq(("range1","hash1","e1",11111),("range1","hash2","e2",22222),("range1","hash3","e3",33333))
+        val data5 = Seq(("range1", "hash1", "e1", 11111), ("range1", "hash2", "e2", 22222), ("range1", "hash3", "e3", 33333))
           .toDF("range", "hash", "value1", "value2")
 
         data1.write
@@ -209,9 +210,9 @@ class StarLakePartFileMergeSuite extends QueryTest
           expr("stringOP(value1) as value1"),
           expr("intOp(value2) as value2")),
           Seq(
-            ("range1","hash1","e1",12345),
-            ("range1","hash2","e2",24690),
-            ("range1","hash3","e3",37035))
+            ("range1", "hash1", "e1", 12345),
+            ("range1", "hash2", "e2", 24690),
+            ("range1", "hash3", "e3", 37035))
             .toDF("range", "hash", "value1", "value2"))
 
       }
@@ -219,10 +220,6 @@ class StarLakePartFileMergeSuite extends QueryTest
 
     })
   }
-
-
-
-
 
 
 }

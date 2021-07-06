@@ -18,7 +18,6 @@ package org.apache.spark.sql.execution.datasources.v2.merge
 
 import java.util.{Locale, OptionalLong}
 
-import com.engineplus.star.meta.MetaUtils
 import org.apache.hadoop.conf.Configuration
 import org.apache.hadoop.fs.Path
 import org.apache.parquet.hadoop.ParquetInputFormat
@@ -33,13 +32,12 @@ import org.apache.spark.sql.execution.datasources.v2.merge.parquet.{MergeFilePar
 import org.apache.spark.sql.internal.SQLConf
 import org.apache.spark.sql.sources.Filter
 import org.apache.spark.sql.star.sources.StarLakeSQLConf
-import org.apache.spark.sql.star.{BatchDataFileIndexV2, SnapshotManagement, StarLakeFileIndexV2, StarLakePartFileMerge, StarLakeUtils}
 import org.apache.spark.sql.star.utils.{DataFileInfo, TableInfo}
+import org.apache.spark.sql.star._
 import org.apache.spark.sql.types.StructType
 import org.apache.spark.sql.util.CaseInsensitiveStringMap
 import org.apache.spark.sql.{AnalysisException, SparkSession}
-import org.apache.spark.util.SerializableConfiguration
-import org.apache.spark.util.Utils
+import org.apache.spark.util.{SerializableConfiguration, Utils}
 
 import scala.collection.JavaConverters._
 import scala.collection.mutable.ArrayBuffer
@@ -69,8 +67,8 @@ abstract class MergeDeltaParquetScan(sparkSession: SparkSession,
       f.copy(write_version = 0)
     } else f)
 
-  /** if delta files are too many, we will execute compaction first*/
-  private def compactAndReturnNewFileIndex(oriFileIndex: StarLakeFileIndexV2): StarLakeFileIndexV2 ={
+  /** if delta files are too many, we will execute compaction first */
+  private def compactAndReturnNewFileIndex(oriFileIndex: StarLakeFileIndexV2): StarLakeFileIndexV2 = {
     val files = oriFileIndex.getFileInfo(partitionFilters)
       .map(f => if (f.is_base_file) {
         f.copy(write_version = 0)
@@ -85,12 +83,10 @@ abstract class MergeDeltaParquetScan(sparkSession: SparkSession,
 
     val sessionConf = sparkSession.sessionState.conf
     val minimumDeltaFiles = sessionConf.getConf(StarLakeSQLConf.PART_MERGE_FILE_MINIMUM_NUM)
-    val maxFiles = if(partitionGroupedFiles.isEmpty) 0 else partitionGroupedFiles.map(m => m.map(_.length).max).max
+    val maxFiles = if (partitionGroupedFiles.isEmpty) 0 else partitionGroupedFiles.map(m => m.map(_.length).max).max
 
-    if(minimumDeltaFiles >= maxFiles || !sessionConf.getConf(StarLakeSQLConf.PART_MERGE_ENABLE)){
-
-      println("==checkflag: MergeDeltaParquetScan compactAndReturnNewFileIndex return...")
-
+    //if delta files num less equal than setting num, skip part merge and do nothing
+    if (minimumDeltaFiles >= maxFiles || !sessionConf.getConf(StarLakeSQLConf.PART_MERGE_ENABLE)) {
       return oriFileIndex
     }
 
@@ -120,7 +116,6 @@ abstract class MergeDeltaParquetScan(sparkSession: SparkSession,
 
     BatchDataFileIndexV2(sparkSession, snapshotManagement, remainFiles)
   }
-
 
 
   override def createReaderFactory(): PartitionReaderFactory = {
