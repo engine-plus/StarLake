@@ -21,6 +21,7 @@ import java.util.Date
 
 import com.engineplus.star.meta.{DataOperation, MetaCommit}
 import org.apache.hadoop.fs.{FileSystem, Path}
+import org.apache.spark.broadcast.Broadcast
 import org.apache.spark.internal.Logging
 import org.apache.spark.sql.star.sources.StarLakeSQLConf
 import org.apache.spark.sql.star.utils.FileOperation
@@ -30,7 +31,7 @@ import org.apache.spark.util.{Clock, SerializableConfiguration, SystemClock}
 
 import scala.collection.JavaConverters._
 
-object CleanupCommand extends CleanupCommandImpl {
+object CleanupCommand extends CleanupCommandImpl with Serializable{
 
   /**
     * Clears all untracked files and folders within this table. First lists all the files and
@@ -147,7 +148,16 @@ object CleanupCommand extends CleanupCommandImpl {
       }
       logInfo(s"Deleting untracked files and empty directories in $path")
 
-      val filesDeleted = delete(diff, fs)
+      val canConcurrentDelete = spark.conf.get(StarLakeSQLConf.CLEANUP_CONCURRENT_DELETE_ENABLE)
+      val filesDeleted = if(canConcurrentDelete){
+        deleteConcurrently(
+          spark,
+          diff,
+          snapshotManagement.table_name,
+          spark.sparkContext.broadcast(new SerializableConfiguration(sessionHadoopConf)))
+      }else{
+        delete(diff, fs)
+      }
 
 
       logInfo(s"Deleted $filesDeleted files and directories in a total " +
@@ -194,6 +204,18 @@ trait CleanupCommandImpl extends Logging {
   protected def delete(diff: Dataset[String], fs: FileSystem): Long = {
     val fileResultSet = diff.toLocalIterator().asScala
     fileResultSet.map(p => stringToPath(p)).count(f => FileOperation.tryDeleteNonRecursive(fs, f))
+  }
+  protected def deleteConcurrently(spark: SparkSession,
+                       diff: Dataset[String],
+                       tablePath: String,
+                       hadoopConf: Broadcast[SerializableConfiguration]): Long = {
+    import spark.implicits._
+    diff.mapPartitions { files =>
+      val fs = new Path(tablePath).getFileSystem(hadoopConf.value.value)
+      val filesDeletedPerPartition =
+        files.map(p => stringToPath(p)).count(f => FileOperation.tryDeleteNonRecursive(fs, f))
+      Iterator(filesDeletedPerPartition)
+    }.reduce(_ + _)
   }
 
   protected def stringToPath(path: String): Path = new Path(new URI(path))

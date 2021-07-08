@@ -46,7 +46,7 @@ object StarLakeSQLConf {
 
   val COMPACTION_TIME: ConfigEntry[Long] =
     buildConf("compaction.interval")
-      .doc("If the last update time exceeds the set interval, compression is triggered, default is 12 hours.")
+      .doc("If the last update time exceeds the set interval, compaction will be triggered, default is 12 hours.")
       .longConf
       .createWithDefault(12 * 60 * 60 * 1000L)
 
@@ -61,7 +61,13 @@ object StarLakeSQLConf {
     buildConf("cleanup.parallelism")
       .doc("The number of parallelism to list a collection of path recursively when cleanup, default is 50.")
       .intConf
-      .createWithDefault(50)
+      .createWithDefault(200)
+
+  val CLEANUP_CONCURRENT_DELETE_ENABLE: ConfigEntry[Boolean] =
+    buildConf("cleanup.concurrent.delete.enable")
+      .doc("If enable delete files concurrently.")
+      .booleanConf
+      .createWithDefault(true)
 
   //默认的meta数据库名
   val META_DATABASE_NAME: ConfigEntry[String] =

@@ -61,6 +61,7 @@ object MetaTableManage {
            |	PRIMARY KEY (table_name)
            |) WITH bloom_filter_fp_chance = 0.01
            |    AND caching = {'keys': 'ALL', 'rows_per_partition': 'ALL'}
+           |    AND gc_grace_seconds = 3600
            |    AND comment = 'meta service table version control'
         """.stripMargin)
     })
@@ -85,6 +86,7 @@ object MetaTableManage {
            |	PRIMARY KEY (table_id,range_value)
            |) WITH bloom_filter_fp_chance = 0.01
            |    AND caching = {'keys': 'ALL', 'rows_per_partition': 'ALL'}
+           |    AND gc_grace_seconds = 3600
            |    AND comment = 'meta service partition Info control'
         """.stripMargin)
     })
@@ -110,6 +112,7 @@ object MetaTableManage {
            |	PRIMARY KEY ((table_id,range_id), file_path)
            |) WITH bloom_filter_fp_chance = 0.01
            |    AND caching = {'keys': 'ALL', 'rows_per_partition': 'ALL'}
+           |    AND gc_grace_seconds = 3600
            |    AND comment = 'meta service table data info'
         """.stripMargin)
     })
@@ -144,6 +147,7 @@ object MetaTableManage {
            |	PRIMARY KEY ((commit_type,table_id), commit_id, range_id, file_path)
            |) WITH bloom_filter_fp_chance = 0.01
            |    AND caching = {'keys': 'ALL', 'rows_per_partition': 'ALL'}
+           |    AND gc_grace_seconds = 3600
            |    AND comment = 'meta service table data info'
         """.stripMargin)
     })
@@ -162,6 +166,7 @@ object MetaTableManage {
            |	PRIMARY KEY (table_id,key_id)
            |) WITH bloom_filter_fp_chance = 0.01
            |    AND caching = {'keys': 'ALL', 'rows_per_partition': 'ALL'}
+           |    AND gc_grace_seconds = 3600
            |    AND comment = 'split large column value into fragment values'
         """.stripMargin)
     })
@@ -178,6 +183,7 @@ object MetaTableManage {
            |	PRIMARY KEY (lock_id)
            |) WITH bloom_filter_fp_chance = 0.01
            |    AND caching = {'keys': 'ALL', 'rows_per_partition': 'ALL'}
+           |    AND gc_grace_seconds = 3600
            |    AND comment = 'meta service lock info'
         """.stripMargin)
     })
@@ -196,6 +202,7 @@ object MetaTableManage {
            |	PRIMARY KEY (table_id,query_id)
            |) WITH bloom_filter_fp_chance = 0.01
            |    AND caching = {'keys': 'ALL', 'rows_per_partition': 'ALL'}
+           |    AND gc_grace_seconds = 3600
            |    AND comment = 'record streaming info for recovery'
         """.stripMargin)
     })

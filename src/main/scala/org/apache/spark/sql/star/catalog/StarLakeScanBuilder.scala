@@ -140,7 +140,7 @@ case class StarLakeScanBuilder(sparkSession: SparkSession,
 
       val constructor = cls.getConstructors()(0)
       constructor.newInstance(sparkSession, hadoopConf, fileIndex, dataSchema, readDataSchema(),
-        readPartitionSchema(), pushedParquetFilters, options, Seq(parseFilter()))
+        readPartitionSchema(), pushedParquetFilters, options, Seq(parseFilter()), Seq.empty)
         .asInstanceOf[Scan]
 
     } else {
