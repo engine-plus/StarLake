@@ -40,7 +40,7 @@ case class StarLakeTableV2(spark: SparkSession,
                            catalogTable: Option[CatalogTable] = None,
                            tableIdentifier: Option[String] = None,
                            userDefinedFileIndex: Option[StarLakeFileIndexV2] = None,
-                           mergeOperatorInfo: Map[String, String] = Map.empty[String, String])
+                           var mergeOperatorInfo: Option[Map[String, String]] = None)
   extends Table with SupportsWrite with SupportsRead {
 
   private lazy val (rootPath, partitionFilters) =
@@ -62,7 +62,7 @@ case class StarLakeTableV2(spark: SparkSession,
     .orElse(tableIdentifier)
     .getOrElse(s"star.`${snapshotManagement.table_name}`")
 
-  private lazy val snapshot: Snapshot = snapshotManagement.updateSnapshot()
+  private lazy val snapshot: Snapshot = snapshotManagement.snapshot
 
   override def schema(): StructType =
     StructType(snapshot.getTableInfo.data_schema ++ snapshot.getTableInfo.range_partition_schema)
@@ -102,20 +102,21 @@ case class StarLakeTableV2(spark: SparkSession,
   ).asJava
 
   override def newScanBuilder(options: CaseInsensitiveStringMap): StarLakeScanBuilder = {
-    if (mergeOperatorInfo.nonEmpty){
+    if (mergeOperatorInfo.getOrElse(Map.empty[String, String]).nonEmpty) {
       assert(
         snapshot.getTableInfo.hash_partition_columns.nonEmpty,
         "Merge operator should be used with hash partitioned table")
       val fields = schema().fieldNames
-      mergeOperatorInfo.map(_._1.replaceFirst(StarLakeUtils.MERGE_OP_COL, ""))
+      mergeOperatorInfo.get.map(_._1.replaceFirst(StarLakeUtils.MERGE_OP_COL, ""))
         .foreach(info => {
-          if(!fields.contains(info)){
+          if (!fields.contains(info)) {
             throw StarLakeErrors.useMergeOperatorForNonStarTableField(info)
           }
         })
     }
 
-    val newOptions = options.asCaseSensitiveMap().asScala ++ mergeOperatorInfo
+    val newOptions = options.asCaseSensitiveMap().asScala ++
+      mergeOperatorInfo.getOrElse(Map.empty[String, String])
 
     StarLakeScanBuilder(spark, fileIndex, schema(), dataSchema,
       new CaseInsensitiveStringMap(newOptions.asJava), snapshot.getTableInfo)

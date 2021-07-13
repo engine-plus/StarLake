@@ -497,7 +497,7 @@ object MetaCommit extends Logging{
     val update_file_info_arr = meta_info.partitionInfoArray
     meta_info.commit_type match {
       case DeltaCommit => //files conflict checking is not required when committing delta files
-      case CompactionCommit =>
+      case CompactionCommit | PartCompactionCommit=>
         //when committing compaction job, it just need to check that the read files have not been deleted
         DataOperation.checkDataInfo(meta_info.commit_id, update_file_info_arr, false, true)
       case _ =>
@@ -601,6 +601,16 @@ object MetaCommit extends Logging{
               currentPartitionInfo.read_version,
               partition_info.read_version)
           }
+
+        case PartCompactionCommit =>
+          if (versionDiff >= 0) {
+            (currentPartitionInfo.be_compacted, partition_info.delta_file_num + versionDiff.toInt)
+          } else {
+            throw StarLakeErrors.readVersionIllegalException(
+              currentPartitionInfo.read_version,
+              partition_info.read_version)
+          }
+
         case _ => (partition_info.be_compacted, currentPartitionInfo.delta_file_num + 1)
       }
       UndoLog.updatePartitionLogInfo(

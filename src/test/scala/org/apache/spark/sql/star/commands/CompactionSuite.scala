@@ -265,7 +265,9 @@ class CompactionSuite extends QueryTest
       val result = Seq((1, 1, 2, "1,1"), (2, 1, 2, "1,1"), (3, 1, 2, "1,1"), (1, 2, 4, "2,2"), (1, 3, 6, "3,3"))
         .toDF("range", "hash", "v1", "v2")
 
-      val mergeOperatorInfo = Map("v1" -> new MergeOpInt(), "v2" -> new MergeOpString())
+      val mergeOperatorInfo = Map(
+        "v1" -> new MergeOpInt(),
+        "v2" -> "org.apache.spark.sql.star.test.MergeOpString")
       table.compaction(true, mergeOperatorInfo)
       checkAnswer(table.toDF.select("range", "hash", "v1", "v2"), result)
 

@@ -32,12 +32,24 @@ import org.apache.spark.sql.star.rules.StarLakeRelation
 import org.apache.spark.sql.star.sources.{StarLakeBaseRelation, StarLakeSourceUtils}
 import org.apache.spark.sql.star.utils.DataFileInfo
 import org.apache.spark.sql.{AnalysisException, SparkSession}
+import org.apache.spark.util.Utils
 
 
 object StarLakeUtils extends PredicateHelper {
 
   val MERGE_OP_COL = "_star_merge_col_name_"
   val MERGE_OP = "_star_merge_op_"
+
+  /** return async class */
+  def getAsyncClass(className: String): (Boolean, Class[_]) = {
+    try {
+      val cls = Class.forName(className, true, Utils.getContextOrSparkClassLoader)
+      (true, cls)
+    } catch {
+      case e: ClassNotFoundException => (false, null)
+      case e: Exception => throw e
+    }
+  }
 
   /** Check whether this table is a StarTable based on information from the Catalog. */
   def isStarLakeTable(table: CatalogTable): Boolean = StarLakeSourceUtils.isStarLakeTable(table.provider)

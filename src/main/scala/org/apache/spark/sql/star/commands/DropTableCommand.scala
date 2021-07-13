@@ -24,7 +24,7 @@ import org.apache.spark.sql.SparkSession
 import org.apache.spark.sql.catalyst.expressions.{Expression, PredicateHelper}
 import org.apache.spark.sql.star.exception.StarLakeErrors
 import org.apache.spark.sql.star.utils.FileOperation
-import org.apache.spark.sql.star.{PartitionFilter, Snapshot}
+import org.apache.spark.sql.star.{PartitionFilter, Snapshot, SnapshotManagement}
 
 object DropTableCommand {
 
@@ -111,6 +111,7 @@ object DropTableCommand {
     FileOperation.tryDeleteRecursive(fs, path)
 
     UndoLog.deleteUndoLogByTableId(UndoLogType.DropTable.toString, table_id)
+    SnapshotManagement.invalidateCache(table_name)
   }
 
 
@@ -143,16 +144,16 @@ object DropPartitionCommand extends PredicateHelper {
     while (i < MAX_ATTEMPTS) {
 
       if (UndoLog.addDropPartitionUndoLog(table_name, table_id, range_value, range_id)) {
-        dropPartition(table_id, range_value, range_id)
+        dropPartition(table_name, table_id, range_value, range_id)
         i = MAX_ATTEMPTS
       } else {
-        i = checkAndDropPartition(table_id, range_value, range_id, i)
+        i = checkAndDropPartition(table_name, table_id, range_value, range_id, i)
       }
     }
 
   }
 
-  private def checkAndDropPartition(table_id: String, range_value: String, range_id: String, i: Int): Int = {
+  private def checkAndDropPartition(table_name: String, table_id: String, range_value: String, range_id: String, i: Int): Int = {
     val (timestamp, _) = UndoLog.getCommitTimestampAndTag(
       UndoLogType.DropPartition.toString,
       table_id,
@@ -162,7 +163,7 @@ object DropPartitionCommand extends PredicateHelper {
       MAX_ATTEMPTS
     } else if (timestamp > System.currentTimeMillis() - MetaUtils.COMMIT_TIMEOUT) {
       TimeUnit.SECONDS.sleep(WAIT_TIME)
-      checkAndDropPartition(table_id, range_value, range_id, i)
+      checkAndDropPartition(table_name, table_id, range_value, range_id, i)
     } else {
       val update_timestamp = UndoLog.updateUndoLogTimestamp(
         commit_type = UndoLogType.DropPartition.toString,
@@ -172,7 +173,7 @@ object DropPartitionCommand extends PredicateHelper {
         last_timestamp = timestamp
       )
       if (update_timestamp._1) {
-        dropPartition(table_id, range_value, range_id)
+        dropPartition(table_name, table_id, range_value, range_id)
         MAX_ATTEMPTS
       }
       else {
@@ -182,7 +183,7 @@ object DropPartitionCommand extends PredicateHelper {
     }
   }
 
-  private def dropPartition(table_id: String, range_value: String, range_id: String): Unit = {
+  private def dropPartition(table_name: String, table_id: String, range_value: String, range_id: String): Unit = {
     MetaVersion.deletePartitionInfoByRangeId(table_id, range_value, range_id)
     UndoLog.deleteUndoLogByRangeId(UndoLogType.Commit.toString, table_id, range_id)
     UndoLog.deleteUndoLogByRangeId(UndoLogType.Partition.toString, table_id, range_id)
@@ -199,6 +200,7 @@ object DropPartitionCommand extends PredicateHelper {
       table_id,
       UndoLogType.DropPartition.toString,
       range_id)
+    SnapshotManagement(table_name).updateSnapshot()
   }
 
 

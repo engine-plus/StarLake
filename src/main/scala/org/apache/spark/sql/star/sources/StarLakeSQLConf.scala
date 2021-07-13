@@ -32,7 +32,6 @@ object StarLakeSQLConf {
       .booleanConf
       .createWithDefault(false)
 
-
   val USE_DELTA_FILE: ConfigEntry[Boolean] =
     buildConf("deltaFile.enabled")
       .doc("If true, enables delta files on specific scene(e.g. upsert).")
@@ -47,7 +46,7 @@ object StarLakeSQLConf {
 
   val COMPACTION_TIME: ConfigEntry[Long] =
     buildConf("compaction.interval")
-      .doc("If the last update time exceeds the set interval, compression is triggered, default is 12 hours.")
+      .doc("If the last update time exceeds the set interval, compaction will be triggered, default is 12 hours.")
       .longConf
       .createWithDefault(12 * 60 * 60 * 1000L)
 
@@ -62,7 +61,13 @@ object StarLakeSQLConf {
     buildConf("cleanup.parallelism")
       .doc("The number of parallelism to list a collection of path recursively when cleanup, default is 50.")
       .intConf
-      .createWithDefault(50)
+      .createWithDefault(200)
+
+  val CLEANUP_CONCURRENT_DELETE_ENABLE: ConfigEntry[Boolean] =
+    buildConf("cleanup.concurrent.delete.enable")
+      .doc("If enable delete files concurrently.")
+      .booleanConf
+      .createWithDefault(true)
 
   //默认的meta数据库名
   val META_DATABASE_NAME: ConfigEntry[String] =
@@ -256,6 +261,55 @@ object StarLakeSQLConf {
         """.stripMargin)
       .booleanConf
       .createWithDefault(false)
+
+  val PART_MERGE_ENABLE: ConfigEntry[Boolean] =
+    buildConf("part.merge.enable")
+      .doc(
+        """
+          |If true, part files merging will be used to avoid OOM when it has too many delta files.
+        """.stripMargin)
+      .booleanConf
+      .createWithDefault(false)
+
+  val PART_MERGE_COMPACTION_COMMIT_ENABLE: ConfigEntry[Boolean] =
+    buildConf("part.merge.compaction.commit.enable")
+      .doc(
+        """
+          |If true, it will commit the compacted files into meta store, and the later reader can read faster.
+          |Note that if you read a column by self-defined merge operator, the compacted result should also use
+          |this merge operator, make sure that the result is expected or disable compaction commit.
+        """.stripMargin)
+      .booleanConf
+      .createWithDefault(true)
+
+  val PART_MERGE_FILE_MINIMUM_NUM: ConfigEntry[Int] =
+    buildConf("part.merge.file.minimum.num")
+      .doc(
+        """
+          |If delta file num more than this count, we will check for part merge.
+        """.stripMargin)
+      .intConf
+      .createWithDefault(5)
+
+
+  val PART_MERGE_FILE_SIZE_FACTOR: ConfigEntry[Double] =
+    buildConf("part.merge.file.size.factor")
+      .doc(
+        """
+          |File size factor to calculate part merge max size.
+          |Expression: PART_MERGE_FILE_MINIMUM_NUM * PART_MERGE_FILE_SIZE_FACTOR * 128M
+        """.stripMargin)
+      .doubleConf
+      .createWithDefault(0.1)
+
+  val ASYNC_READER_ENABLE: ConfigEntry[Boolean] =
+    buildConf("async.reader.enable")
+      .doc(
+        """
+          |Whether async reader can be used.
+        """.stripMargin)
+      .booleanConf
+      .createWithDefault(true)
 
 
 }

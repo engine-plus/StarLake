@@ -88,9 +88,9 @@ case class StarLakeScanBuilder(sparkSession: SparkSession,
   // All filters that can be converted to Parquet are pushed down.
   override def pushedFilters: Array[Filter] = pushedParquetFilters
 
-  //note: hash partition columns must be first
+  //note: hash partition columns must be last
   def mergeReadDataSchema(): StructType = {
-    StructType((tableInfo.hash_partition_schema ++ readDataSchema()).distinct)
+    StructType((readDataSchema() ++ tableInfo.hash_partition_schema).distinct)
   }
 
   override def build(): Scan = {
@@ -133,14 +133,14 @@ case class StarLakeScanBuilder(sparkSession: SparkSession,
 
   def parquetScan(canUseAsyncReader: Boolean): Scan = {
     val asyncFactoryName = "org.apache.spark.sql.execution.datasources.v2.parquet.AsyncParquetScan"
-    val (hasAsyncClass, cls) = MetaUtils.getAsyncClass(asyncFactoryName)
+    val (hasAsyncClass, cls) = StarLakeUtils.getAsyncClass(asyncFactoryName)
 
     if (canUseAsyncReader && hasAsyncClass) {
       logInfo("======================  async scan   ========================")
 
       val constructor = cls.getConstructors()(0)
       constructor.newInstance(sparkSession, hadoopConf, fileIndex, dataSchema, readDataSchema(),
-        readPartitionSchema(), pushedParquetFilters, options, Seq(parseFilter()))
+        readPartitionSchema(), pushedParquetFilters, options, Seq(parseFilter()), Seq.empty)
         .asInstanceOf[Scan]
 
     } else {

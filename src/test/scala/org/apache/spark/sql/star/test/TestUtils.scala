@@ -195,3 +195,9 @@ class MergeOpString extends MergeOperator[String]{
     input.mkString(",")
   }
 }
+
+class MergeOpString02 extends MergeOperator[String]{
+  override def mergeData(input: Seq[String]): String = {
+    input.mkString(";")
+  }
+}

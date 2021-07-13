@@ -27,85 +27,73 @@ import org.apache.spark.sql.star.catalog.StarLakeTableV2
 import org.apache.spark.sql.star.exception.StarLakeErrors
 import org.apache.spark.sql.star.utils.AnalysisHelper
 
-import scala.collection.mutable.ArrayBuffer
+import scala.collection.mutable
 
 case class ExtractMergeOperator(sparkSession: SparkSession)
   extends Rule[LogicalPlan] with AnalysisHelper {
-  override def apply(plan: LogicalPlan): LogicalPlan = plan resolveOperatorsDown  {
-    case p @ Project(projectList, relation @ DataSourceV2Relation(table: StarLakeTableV2, _,_,_,_)) =>
-      val functionRegistry = sparkSession.sessionState.functionRegistry
-      val arrBuf = new ArrayBuffer[(String, String)]()
 
-      val newProjectList: Seq[NamedExpression] = projectList.map {
-        case a@Alias(child: ScalaUDF, name) =>
-          if (child.udfName.isDefined && child.udfName.get.startsWith(StarLakeUtils.MERGE_OP)) {
-            val mergeOPName = child.udfName.get.replaceFirst(StarLakeUtils.MERGE_OP, "")
-            val funInfo = functionRegistry.lookupFunction(FunctionIdentifier(mergeOPName)).get
-            val mergeOpClassName = funInfo.getClassName
-            val newChild = if (child.children.length == 1) {
-              child.children.head match {
-                case Cast(castChild, _, _) => castChild
-                case _ => child.children.head
+  private def getStarRelation(child: LogicalPlan): (Boolean, StarLakeTableV2) = {
+    child match {
+      case DataSourceV2Relation(table: StarLakeTableV2, _, _, _, _) => (true, table)
+      case p: LogicalPlan if p.children.length == 1 => getStarRelation(p.children.head)
+      case _ => (false, null)
+    }
+  }
+
+  override def apply(plan: LogicalPlan): LogicalPlan = plan resolveOperatorsDown {
+    case p@Project(list, child) if list.exists {
+      case Alias(udf: ScalaUDF, _) if udf.udfName.isDefined && udf.udfName.get.startsWith(StarLakeUtils.MERGE_OP) => true
+      case _ => false
+    } =>
+      val (hasStarRelation, starTable) = getStarRelation(child)
+      if (hasStarRelation) {
+        val functionRegistry = sparkSession.sessionState.functionRegistry
+        val existMap = starTable.mergeOperatorInfo.getOrElse(Map.empty[String, String])
+
+        val mergeOpMap = mutable.HashMap(existMap.toSeq: _*)
+
+        val newProjectList: Seq[NamedExpression] = list.map {
+
+          case a@Alias(udf: ScalaUDF, name) =>
+            if (udf.udfName.isDefined && udf.udfName.get.startsWith(StarLakeUtils.MERGE_OP)) {
+              val mergeOPName = udf.udfName.get.replaceFirst(StarLakeUtils.MERGE_OP, "")
+              val funInfo = functionRegistry.lookupFunction(FunctionIdentifier(mergeOPName)).get
+              val mergeOpClassName = funInfo.getClassName
+
+              val newChild = if (udf.children.length == 1) {
+                udf.children.head match {
+                  case Cast(castChild, _, _) => castChild
+                  case _ => udf.children.head
+                }
+              } else {
+                udf.children.head
               }
+              assert(newChild.references.size == 1)
+
+              val key = StarLakeUtils.MERGE_OP_COL + newChild.references.head.name
+              if (mergeOpMap.contains(key)) {
+                throw StarLakeErrors.multiMergeOperatorException(newChild.references.head.name)
+              }
+              mergeOpMap.put(key, mergeOpClassName)
+
+              val newAlias = Alias(newChild, name)(a.exprId, a.qualifier, a.explicitMetadata)
+              newAlias
             } else {
-              child.children.head
+              a
             }
-            assert(newChild.references.size == 1)
-            arrBuf += ((StarLakeUtils.MERGE_OP_COL + newChild.references.head.name, mergeOpClassName))
 
-            val tt = Alias(newChild, name)(a.exprId,a.qualifier,a.explicitMetadata)
-            tt
-          } else {
-            a
-          }
+          case o => o
+        }
 
-        case o => o
-      }
-
-      if (arrBuf.nonEmpty){
-        val newTable = table.copy(mergeOperatorInfo = arrBuf.toMap)
-        p.copy(projectList = newProjectList, child = relation.copy(table = newTable))
-      }else{
+        if (mergeOpMap.nonEmpty) {
+          starTable.mergeOperatorInfo = Option(mergeOpMap.toMap)
+          p.copy(projectList = newProjectList)
+        } else {
+          p
+        }
+      } else {
         p
       }
-
-    case p @ Project(projectList, filter @ Filter(_, relation @ DataSourceV2Relation(table: StarLakeTableV2, _,_,_,_))) =>
-      val functionRegistry = sparkSession.sessionState.functionRegistry
-      val arrBuf = new ArrayBuffer[(String, String)]()
-
-      val newProjectList: Seq[NamedExpression] = projectList.map {
-        case a @ Alias(child: ScalaUDF, name) =>
-          if (child.udfName.isDefined && child.udfName.get.startsWith(StarLakeUtils.MERGE_OP)) {
-            val mergeOPName = child.udfName.get.replaceFirst(StarLakeUtils.MERGE_OP, "")
-            val funInfo = functionRegistry.lookupFunction(FunctionIdentifier(mergeOPName)).get
-            val mergeOpClassName = funInfo.getClassName
-            val newChild = if (child.children.length == 1) {
-              child.children.head match {
-                case Cast(castChild, _, _) => castChild
-                case _ => child.children.head
-              }
-            } else {
-              child.children.head
-            }
-            assert(newChild.references.size == 1)
-            arrBuf += ((StarLakeUtils.MERGE_OP_COL + newChild.references.head.name, mergeOpClassName))
-
-            val tt = Alias(newChild, name)(a.exprId,a.qualifier,a.explicitMetadata)
-            tt
-          } else {
-            a
-          }
-
-        case o => o
-      }
-
-      if (arrBuf.nonEmpty){
-        val newTable = table.copy(mergeOperatorInfo = arrBuf.toMap)
-        p.copy(projectList = newProjectList, child = filter.copy(child = relation.copy(table = newTable)))
-      }else{
-        p
-      }
-
   }
 
 
@@ -121,8 +109,8 @@ case class NonMergeOperatorUDFCheck(spark: SparkSession)
   def apply(plan: LogicalPlan): Unit = {
     plan.foreach {
       case Project(projectList, _) =>
-        projectList.foreach{
-          case Alias(child: ScalaUDF, _) if child.udfName.isDefined && child.udfName.get.startsWith(StarLakeUtils.MERGE_OP)=>
+        projectList.foreach {
+          case Alias(child: ScalaUDF, _) if child.udfName.isDefined && child.udfName.get.startsWith(StarLakeUtils.MERGE_OP) =>
             throw StarLakeErrors.useMergeOperatorForNonStarTableField(child.children.head.references.head.name)
           case _ =>
         }

@@ -32,10 +32,6 @@ class MergeOperatorColumnarBatchRow(columns: Array[ColumnVector],
   var idMix: Seq[Seq[(Int, Int)]] = _
   var value: Array[Any] = new Array[Any](size)
 
-  def updateColumns(mergeColumns: ColumnarBatch, updateIndex: Seq[Int]) {
-    updateIndex.indices.foreach(i => columns(updateIndex(i)) = mergeColumns.column(i))
-  }
-
   private def getIndex(ordinal: Int): Seq[(Int, Int)] = {
     idMix(ordinal)
   }

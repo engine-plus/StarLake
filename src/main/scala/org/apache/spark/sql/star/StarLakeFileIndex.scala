@@ -28,6 +28,7 @@ import org.apache.spark.sql.{AnalysisException, SparkSession}
 
 import scala.collection.mutable
 
+/** file index for data source v1 */
 abstract class StarLakeFileIndex(spark: SparkSession,
                                  snapshotManagement: SnapshotManagement) extends FileIndex {
 
@@ -129,106 +130,106 @@ class BatchDataFileIndex(spark: SparkSession,
 }
 
 
-/**
-  * used in merge parquet files
-  */
-class MergeScanFileIndex(override val spark: SparkSession,
-                         override val snapshotManagement: SnapshotManagement,
-                         parameters: Map[String, String],
-                         userSpecifiedSchema: Option[StructType],
-                         files: Seq[DataFileInfo],
-                         allowFilter: Boolean = true)
-  extends StarLakeFileIndexV2(spark, snapshotManagement) {
+///**
+//  * used in merge parquet files
+//  */
+//class MergeScanFileIndex(override val spark: SparkSession,
+//                         override val snapshotManagement: SnapshotManagement,
+//                         parameters: Map[String, String],
+//                         userSpecifiedSchema: Option[StructType],
+//                         files: Seq[DataFileInfo],
+//                         allowFilter: Boolean = true)
+//  extends StarLakeFileIndexV2(spark, snapshotManagement) {
+//
+//  //  lazy val tableName: String = snapshotManagement.snapshot.getTableInfo.table_name
+//
+//  override def getFileInfo(filters: Seq[Expression]): Seq[DataFileInfo] = files
+//
+//  override def rootPaths: Seq[Path] = snapshotManagement.snapshot.getTableInfo.table_path :: Nil
+//
+//
+//  override def partitionSchema: StructType = snapshotManagement.snapshot.getTableInfo.range_partition_schema
+//
+//  override def allFiles(): Seq[FileStatus] = files.map { f =>
+//    new FileStatus(
+//      /* length */ f.size,
+//      /* isDir */ false,
+//      /* blockReplication */ 0,
+//      /* blockSize */ 1,
+//      /* modificationTime */ f.modification_time,
+//      absolutePath(f.file_path, tableName))
+//  }
+//
+//  override def listFiles(partitionFilters: Seq[Expression],
+//                         dataFilters: Seq[Expression]): Seq[PartitionDirectory] = {
+//    val timeZone = spark.sessionState.conf.sessionLocalTimeZone
+//    val realFiles = if (allowFilter) {
+//      matchingFiles(partitionFilters, dataFilters)
+//    } else {
+//      files
+//    }
+//
+//    realFiles
+//      .groupBy(_.range_partitions).map {
+//      case (partitionValues, files) =>
+//        val rowValues: Array[Any] = partitionSchema.map { p =>
+//          Cast(Literal(partitionValues(p.name)), p.dataType, Option(timeZone)).eval()
+//        }.toArray
+//
+//        //file status
+//        val fileStats = files.map { f =>
+//          new FileStatus(
+//            /* length */ f.size,
+//            /* isDir */ false,
+//            /* blockReplication */ 0,
+//            /* blockSize */ 1,
+//            /* modificationTime */ f.modification_time,
+//            absolutePath(f.file_path, tableName))
+//        }.toArray
+//
+//        PartitionDirectory(new GenericInternalRow(rowValues), fileStats)
+//    }.toSeq
+//  }
+//
+//  def matchingFiles(partitionFilters: Seq[Expression],
+//                    dataFilters: Seq[Expression] = Nil): Seq[DataFileInfo] = {
+//    import spark.implicits._
+//    PartitionFilter.filterFileList(
+//      snapshotManagement.snapshot.getTableInfo.range_partition_schema,
+//      files.toDF(),
+//      partitionFilters)
+//      .as[DataFileInfo]
+//      .collect()
+//  }
+//
+//
+//  override def inputFiles: Array[String] = {
+//    files.map(file => file.file_path).toArray
+//  }
+//
+//
+//  override val sizeInBytes: Long = files.map(_.size).sum
+//
+//
+//  override def partitionSpec(): PartitionSpec = {
+//    throw new AnalysisException(
+//      s"Function partitionSpec() is not support in merge.")
+//  }
+//
+//
+//  override def leafFiles: mutable.LinkedHashMap[Path, FileStatus] = {
+//    throw new AnalysisException(
+//      s"Function leafFiles() is not support in merge.")
+//  }
+//
+//  override def leafDirToChildrenFiles: Map[Path, Array[FileStatus]] = {
+//    throw new AnalysisException(
+//      s"Function leafDirToChildrenFiles() is not support in merge.")
+//  }
+//
+//}
 
-  //  lazy val tableName: String = snapshotManagement.snapshot.getTableInfo.table_name
-
-  override def getFileInfo(filters: Seq[Expression]): Seq[DataFileInfo] = files
-
-  override def rootPaths: Seq[Path] = snapshotManagement.snapshot.getTableInfo.table_path :: Nil
-
-
-  override def partitionSchema: StructType = snapshotManagement.snapshot.getTableInfo.range_partition_schema
-
-  override def allFiles(): Seq[FileStatus] = files.map { f =>
-    new FileStatus(
-      /* length */ f.size,
-      /* isDir */ false,
-      /* blockReplication */ 0,
-      /* blockSize */ 1,
-      /* modificationTime */ f.modification_time,
-      absolutePath(f.file_path, tableName))
-  }
-
-  override def listFiles(partitionFilters: Seq[Expression],
-                         dataFilters: Seq[Expression]): Seq[PartitionDirectory] = {
-    val timeZone = spark.sessionState.conf.sessionLocalTimeZone
-    val realFiles = if (allowFilter) {
-      matchingFiles(partitionFilters, dataFilters)
-    } else {
-      files
-    }
-
-    realFiles
-      .groupBy(_.range_partitions).map {
-      case (partitionValues, files) =>
-        val rowValues: Array[Any] = partitionSchema.map { p =>
-          Cast(Literal(partitionValues(p.name)), p.dataType, Option(timeZone)).eval()
-        }.toArray
-
-        //file status
-        val fileStats = files.map { f =>
-          new FileStatus(
-            /* length */ f.size,
-            /* isDir */ false,
-            /* blockReplication */ 0,
-            /* blockSize */ 1,
-            /* modificationTime */ f.modification_time,
-            absolutePath(f.file_path, tableName))
-        }.toArray
-
-        PartitionDirectory(new GenericInternalRow(rowValues), fileStats)
-    }.toSeq
-  }
-
-  def matchingFiles(partitionFilters: Seq[Expression],
-                    dataFilters: Seq[Expression] = Nil): Seq[DataFileInfo] = {
-    import spark.implicits._
-    PartitionFilter.filterFileList(
-      snapshotManagement.snapshot.getTableInfo.range_partition_schema,
-      files.toDF(),
-      partitionFilters)
-      .as[DataFileInfo]
-      .collect()
-  }
-
-
-  override def inputFiles: Array[String] = {
-    files.map(file => file.file_path).toArray
-  }
-
-
-  override val sizeInBytes: Long = files.map(_.size).sum
-
-
-  override def partitionSpec(): PartitionSpec = {
-    throw new AnalysisException(
-      s"Function partitionSpec() is not support in merge.")
-  }
-
-
-  override def leafFiles: mutable.LinkedHashMap[Path, FileStatus] = {
-    throw new AnalysisException(
-      s"Function leafFiles() is not support in merge.")
-  }
-
-  override def leafDirToChildrenFiles: Map[Path, Array[FileStatus]] = {
-    throw new AnalysisException(
-      s"Function leafDirToChildrenFiles() is not support in merge.")
-  }
-
-}
-
-
+/** file index for data source v2 */
 abstract class StarLakeFileIndexV2(val spark: SparkSession,
                                    val snapshotManagement: SnapshotManagement)
   extends PartitioningAwareFileIndex(spark, Map.empty[String, String], None) {
@@ -254,8 +255,6 @@ abstract class StarLakeFileIndexV2(val spark: SparkSession,
   override def listFiles(partitionFilters: Seq[Expression],
                          dataFilters: Seq[Expression]): Seq[PartitionDirectory] = {
     val timeZone = spark.sessionState.conf.sessionLocalTimeZone
-
-    snapshotManagement.updateSnapshot()
 
     matchingFiles(partitionFilters, dataFilters)
       .groupBy(_.range_partitions).map {

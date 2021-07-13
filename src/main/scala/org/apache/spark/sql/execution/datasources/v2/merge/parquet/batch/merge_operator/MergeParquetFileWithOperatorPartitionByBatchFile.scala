@@ -51,6 +51,9 @@ class MergeParquetFileWithOperatorPartitionByBatchFile[T](filesInfo: Seq[Seq[(Me
 
     if (mergeLogic.isHeapEmpty) {
       if (filesItr.hasNext) {
+        //close current file readers
+        mergeLogic.closeReadFileReader()
+
         mergeLogic = new MergeMultiFileWithOperator(filesItr.next(), mergeOperatorInfo)
       } else {
         return false

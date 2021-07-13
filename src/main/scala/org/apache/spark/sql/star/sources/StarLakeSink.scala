@@ -18,6 +18,7 @@ package org.apache.spark.sql.star.sources
 
 import com.engineplus.star.meta.StreamingRecord
 import org.apache.hadoop.fs.Path
+import org.apache.spark.MapOutputTrackerMaster
 import org.apache.spark.sql.execution.streaming.{Sink, StreamExecution}
 import org.apache.spark.sql.star.exception.StarLakeErrors
 import org.apache.spark.sql.star.schema.{ImplicitMetadataOperation, SchemaUtils}
@@ -55,7 +56,7 @@ class StarLakeSink(sqlContext: SQLContext,
       }
 
       val tableInfo = tc.tableInfo
-      if(StreamingRecord.getBatchId(tableInfo.table_id, queryId) >= batchId){
+      if (StreamingRecord.getBatchId(tableInfo.table_id, queryId) >= batchId) {
         logInfo(s"== Skipping already complete batch $batchId, in query $queryId")
         return
       }
@@ -81,6 +82,13 @@ class StarLakeSink(sqlContext: SQLContext,
       val newFiles = tc.writeFiles(data, Some(options))
 
       tc.commit(newFiles, deletedFiles, queryId, batchId)
+
+      //clean shuffle data
+      val map = sqlContext.sparkContext.env.mapOutputTracker.asInstanceOf[MapOutputTrackerMaster].shuffleStatuses
+      map.keys.foreach(shuffleId => {
+        sqlContext.sparkContext.cleaner.get.doCleanupShuffle(shuffleId, blocking = false)
+      })
+
     })
 
   override def toString: String = s"StarSink[${snapshotManagement.table_name}]"

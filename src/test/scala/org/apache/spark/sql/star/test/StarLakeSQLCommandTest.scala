@@ -26,6 +26,7 @@ import org.apache.spark.internal.Logging
 import org.apache.spark.sql.catalyst.TableIdentifier
 import org.apache.spark.sql.internal.SQLConf
 import org.apache.spark.sql.star.catalog.StarLakeCatalog
+import org.apache.spark.sql.star.sources.StarLakeSQLConf
 import org.apache.spark.sql.test.{SharedSparkSession, TestSparkSession}
 import org.apache.spark.sql.{SparkSession, SparkSessionExtensions}
 import org.apache.spark.util.Utils
@@ -37,6 +38,7 @@ trait StarLakeTestUtils extends Logging {
   override protected def createSparkSession: TestSparkSession = {
     SparkSession.cleanupAnyExistingSession()
     val session = new StarLakeTestSparkSession(sparkConf)
+    session.conf.set(StarLakeSQLConf.META_DATABASE_NAME.key, "test_star_meta")
     session
   }
 
@@ -100,6 +102,7 @@ trait StarLakeSQLCommandTest extends StarLakeTestUtils {
   override protected def createSparkSession: TestSparkSession = {
     SparkSession.cleanupAnyExistingSession()
     val session = new StarLakeTestSparkSession(sparkConf)
+    session.conf.set(StarLakeSQLConf.META_DATABASE_NAME.key, "test_star_meta")
     session.conf.set(SQLConf.V2_SESSION_CATALOG_IMPLEMENTATION.key, classOf[StarLakeCatalog].getName)
 
     session

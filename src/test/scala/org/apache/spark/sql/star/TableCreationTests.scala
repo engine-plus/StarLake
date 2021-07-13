@@ -622,7 +622,7 @@ trait TableCreationTests
       withTable("star_test") {
         val path = dir.getCanonicalPath
         Seq(1L -> "a").toDF("col1", "col2").write.parquet(path)
-        val e = intercept[AnalysisException] {
+        val e = intercept[Exception] {
           sql(
             s"""
                |CREATE TABLE star_test (col1 int, col2 string)
@@ -803,12 +803,12 @@ trait TableCreationTests
         tableLoc.mkdir()
         val hiddenGarbageFile = new File(tableLoc.getCanonicalPath, ".garbage")
         hiddenGarbageFile.createNewFile()
-        var ex = intercept[AnalysisException] {
+        var ex = intercept[Exception] {
           sql("CREATE TABLE tab1 USING star AS SELECT 2, 'b'")
         }.getMessage
         assert(ex.contains("Failed to create table"))
 
-        ex = intercept[AnalysisException] {
+        ex = intercept[Exception] {
           sql("CREATE TABLE tab1 (col1 int, col2 string) USING star")
         }.getMessage
         assert(ex.contains("Failed to create table"))
@@ -1094,7 +1094,7 @@ trait TableCreationTests
         Seq((3, 4)).toDF("a", "b")
           .write.format("parquet")
           .save(dir.toString)
-        val ex = intercept[AnalysisException](spark.sql(
+        val ex = intercept[Exception](spark.sql(
           s"""
              |CREATE TABLE t
              |USING star

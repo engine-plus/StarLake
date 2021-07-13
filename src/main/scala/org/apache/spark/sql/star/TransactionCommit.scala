@@ -26,6 +26,7 @@ import org.apache.spark.sql.catalyst.expressions.{And, Expression, Literal}
 import org.apache.spark.sql.execution.datasources.parquet.ParquetSchemaConverter
 import org.apache.spark.sql.star.exception.MetaRerunException
 import org.apache.spark.sql.star.schema.SchemaUtils
+import org.apache.spark.sql.star.sources.StarLakeSQLConf
 import org.apache.spark.sql.star.utils.{DataFileInfo, MetaInfo, PartitionInfo, TableInfo}
 
 import scala.collection.mutable.{ArrayBuffer, HashSet}
@@ -47,6 +48,41 @@ object TransactionCommit {
     *       `OptimisticTransaction.withNewTransaction`. Use that to create and set active tc.
     */
   private[star] def setActive(tc: TransactionCommit): Unit = {
+    if (active.get != null) {
+      throw new IllegalStateException("Cannot set a new TransactionCommit as active when one is already active")
+    }
+    active.set(tc)
+  }
+
+  /**
+    * Clears the active transaction as the active transaction.
+    *
+    * @note This is not meant for being called directly, `OptimisticTransaction.withNewTransaction`.
+    */
+  private[star] def clearActive(): Unit = {
+    active.set(null)
+  }
+
+
+}
+
+class PartMergeTransactionCommit(override val snapshotManagement: SnapshotManagement) extends Transaction {
+
+}
+
+object PartMergeTransactionCommit {
+  private val active = new ThreadLocal[PartMergeTransactionCommit]
+
+  /** Get the active transaction */
+  def getActive(): Option[PartMergeTransactionCommit] = Option(active.get())
+
+  /**
+    * Sets a transaction as the active transaction.
+    *
+    * @note This is not meant for being called directly, only from
+    *       `OptimisticTransaction.withNewTransaction`. Use that to create and set active tc.
+    */
+  private[star] def setActive(tc: PartMergeTransactionCommit): Unit = {
     if (active.get != null) {
       throw new IllegalStateException("Cannot set a new TransactionCommit as active when one is already active")
     }
@@ -115,6 +151,12 @@ trait Transaction extends TransactionalWrite with Logging {
 
   /** Returns the TableInfo at the current point in the log. */
   def tableInfo: TableInfo = newTableInfo.getOrElse(snapshotTableInfo)
+
+  /** Set read files when compacting part of table files. */
+  def setReadFiles(files: Seq[DataFileInfo]): Unit ={
+    readFiles.clear()
+    readFiles ++= files
+  }
 
   /**
     * Records an update to the TableInfo that should be committed with this transaction.
@@ -261,6 +303,7 @@ trait Transaction extends TransactionalWrite with Logging {
         //update delta file num according to commit type
         if (commitType.nonEmpty) {
           commitType.get match {
+
             case DeltaCommit =>
               assert(expire_file_arr_buf.isEmpty, "delta commit should only append files")
               val deltaNum = partition_info.get.delta_file_num + 1
@@ -269,6 +312,7 @@ trait Transaction extends TransactionalWrite with Logging {
                 add_files = add_file_arr_buf.toArray,
                 delta_file_num = deltaNum,
                 be_compacted = false)
+
             case CompactionCommit =>
               partition_info_arr_buf += partition_info.get.copy(
                 read_files = read_file_arr_buf.toArray,
@@ -276,6 +320,17 @@ trait Transaction extends TransactionalWrite with Logging {
                 expire_files = expire_file_arr_buf.toArray,
                 delta_file_num = 0,
                 be_compacted = true)
+
+            case PartCompactionCommit =>
+              val compactionFileNum = sqlConf.getConf(StarLakeSQLConf.PART_MERGE_FILE_MINIMUM_NUM)
+              val deltaNum = Math.max(1, partition_info.get.delta_file_num - compactionFileNum + 1)
+              partition_info_arr_buf += partition_info.get.copy(
+                read_files = read_file_arr_buf.toArray,
+                add_files = add_file_arr_buf.toArray,
+                expire_files = expire_file_arr_buf.toArray,
+                delta_file_num = deltaNum,
+                be_compacted = false)
+
             case _ => throw new IllegalArgumentException("Unsupported CommitType")
           }
         } else {

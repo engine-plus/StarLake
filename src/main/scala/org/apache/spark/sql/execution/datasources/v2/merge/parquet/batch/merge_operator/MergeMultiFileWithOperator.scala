@@ -72,9 +72,9 @@ class MergeMultiFileWithOperator(filesInfo: Seq[(MergePartitionedFile, Partition
 
   private val defaultMergeOp = new DefaultMergeOp[Any]
   private val mergeOp: Seq[MergeOperator[Any]] = resultSchema.map(m => {
-    if (mergeOperatorInfo.contains(m._1)){
+    if (mergeOperatorInfo.contains(m._1)) {
       mergeOperatorInfo(m._1)
-    }else{
+    } else {
       defaultMergeOp
     }
   })
@@ -120,7 +120,6 @@ class MergeMultiFileWithOperator(filesInfo: Seq[(MergePartitionedFile, Partition
   }
 
 
-
   def isHeapEmpty: Boolean = mergeHeap.isEmpty
 
   def merge(): Unit = {
@@ -145,17 +144,17 @@ class MergeMultiFileWithOperator(filesInfo: Seq[(MergePartitionedFile, Partition
       }
 
       currentFile._2.next()
-      if(currentFile._2.hasNext){
+      if (currentFile._2.hasNext) {
         //calculate the field index in File And fill into the MergeBatch Object
         //if previous row has the BatchLastRow, store row data in temp row, else add index into resultIndex
         if (temporaryStoreLastRow) {
           storeRow(currentVersion, currentRowAndLineId._1)
-        }else{
+        } else {
           fillMergeBatchIndex(currentRowAndLineId, currentVersion)
         }
 
         mergeHeap.enqueue(currentFile)
-      }else{
+      } else {
         //if it is the first BatchLastRow, take the rows in resultIndex into temporaryRow
         if (!temporaryStoreLastRow) {
           MergeUtils.resetTemporaryRow(temporaryRow)
@@ -173,7 +172,6 @@ class MergeMultiFileWithOperator(filesInfo: Seq[(MergePartitionedFile, Partition
         if (nextBatches.nonEmpty) {
           val bufferIt = MergeUtils.toBufferdIterator(nextBatches)
           mergeHeap.enqueue(bufferIt.head)
-          updateMergeBatchColumn(nextBatches.head)
         } else {
           mergeHeap.poll()
         }
@@ -183,7 +181,7 @@ class MergeMultiFileWithOperator(filesInfo: Seq[(MergePartitionedFile, Partition
 
   }
 
-  def putIndexedRowToTemporaryRow(): Unit =  {
+  def putIndexedRowToTemporaryRow(): Unit = {
     if (resultIndex.head.nonEmpty) {
       val row = mergeColumnarBatch.getMergeRow(resultIndex)
       storeRowByMergeBatch(row)
@@ -194,7 +192,7 @@ class MergeMultiFileWithOperator(filesInfo: Seq[(MergePartitionedFile, Partition
 
   def storeRowByMergeBatch(row: MergeOperatorColumnarBatchRow): Unit = {
     for (i <- resultIndex.indices) {
-      if(resultIndex(i).nonEmpty){
+      if (resultIndex(i).nonEmpty) {
         val fieldType = indexTypeArray(i)
         getMergeValuesByType(row, i, fieldType._2).foreach(temporaryRow(i) += _)
       }
@@ -205,10 +203,10 @@ class MergeMultiFileWithOperator(filesInfo: Seq[(MergePartitionedFile, Partition
   def storeRow(version: Long, row: InternalRow): Unit = {
     for (i <- versionFileInfoMap(version).indices) {
       val fieldType = versionFileInfoMap(version)(i)
-      if(lastVersion == version){
+      if (lastVersion == version) {
         //it has duplicate data in one file, we just store the last one
         temporaryRow(fieldType._1) = temporaryRow(fieldType._1).init += getValueByType(row, i, fieldType._2)
-      }else{
+      } else {
         temporaryRow(fieldType._1) += getValueByType(row, i, fieldType._2)
       }
     }
@@ -221,9 +219,9 @@ class MergeMultiFileWithOperator(filesInfo: Seq[(MergePartitionedFile, Partition
     val mergeBatchIndex = mergeColumnIndexMap(writerVersion)
 
     columns.indices.foreach(i => {
-      if(lastVersion == writerVersion){
+      if (lastVersion == writerVersion) {
         resultIndex(columns(i)._1) = resultIndex(columns(i)._1).init += ((mergeBatchIndex(i), rowAndId._2))
-      }else{
+      } else {
         resultIndex(columns(i)._1) += ((mergeBatchIndex(i), rowAndId._2))
       }
     })
@@ -235,12 +233,6 @@ class MergeMultiFileWithOperator(filesInfo: Seq[(MergePartitionedFile, Partition
         row.get(key_type._1, key_type._2).toString
       })
       .reduce(_.concat(_))
-  }
-
-
-  def updateMergeBatchColumn(newBatch: (MergePartitionedFile, ColumnarBatch)): Unit = {
-    val updateIndex = mergeColumnIndexMap(newBatch._1.writeVersion)
-    mergeColumnarBatch.updateBatch(newBatch._2, updateIndex)
   }
 
   def getMergeValuesByType(row: MergeOperatorColumnarBatchRow, fieldIndex: Int, dataType: DataType): Seq[Any] = {
@@ -264,11 +256,11 @@ class MergeMultiFileWithOperator(filesInfo: Seq[(MergePartitionedFile, Partition
   }
 
   def getStoredMergeRowByType(row: ArrayBuffer[Any], mergeClass: MergeOperator[Any], dataType: DataType): Any = {
-    if(row.isEmpty){
+    if (row.isEmpty) {
       return null
     }
     dataType match {
-      case StringType => UTF8String.fromString(mergeClass.asInstanceOf[MergeOperator[String]].mergeData(row.asInstanceOf[Seq[UTF8String]].map(r => if(r == null) null else r.toString)))
+      case StringType => UTF8String.fromString(mergeClass.asInstanceOf[MergeOperator[String]].mergeData(row.asInstanceOf[Seq[UTF8String]].map(r => if (r == null) null else r.toString)))
       case IntegerType | DateType => mergeClass.asInstanceOf[MergeOperator[Int]].mergeData(row.asInstanceOf[Seq[Int]])
       case BooleanType => mergeClass.asInstanceOf[MergeOperator[Boolean]].mergeData(row.asInstanceOf[Seq[Boolean]])
       case ByteType => mergeClass.asInstanceOf[MergeOperator[Byte]].mergeData(row.asInstanceOf[Seq[Byte]])
@@ -285,5 +277,10 @@ class MergeMultiFileWithOperator(filesInfo: Seq[(MergePartitionedFile, Partition
       case o => throw new UnsupportedOperationException(s"StarLake MergeOperator don't support type ${o.typeName}")
     }
   }
+
+  override def closeReadFileReader(): Unit = {
+    filesInfo.foreach(f => f._2.close())
+  }
+
 
 }

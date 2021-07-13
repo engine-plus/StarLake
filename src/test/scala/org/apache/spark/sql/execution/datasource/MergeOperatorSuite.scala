@@ -19,7 +19,7 @@ package org.apache.spark.sql.execution.datasource
 import com.engineplus.star.tables.StarTable
 import org.apache.spark.sql.functions._
 import org.apache.spark.sql.star.sources.StarLakeSQLConf
-import org.apache.spark.sql.star.test.{MergeOpInt, MergeOpString, StarLakeTestUtils, TestUtils}
+import org.apache.spark.sql.star.test.{MergeOpInt, MergeOpString, MergeOpString02, StarLakeTestUtils, TestUtils}
 import org.apache.spark.sql.test.SharedSparkSession
 import org.apache.spark.sql.{AnalysisException, QueryTest}
 
@@ -389,6 +389,82 @@ class MergeOperatorSuite extends QueryTest
 
 
   }
+
+
+  test("multi merge operator on one column should failed") {
+    new MergeOpString().register(spark, "stringOp")
+    new MergeOpString02().register(spark, "stringOp02")
+
+    withTempDir(dir => {
+      val tableName = dir.getCanonicalPath
+      Seq(("1", "1", "1"), ("2", "2", "2"), ("3", "3", "3")).toDF("hash", "v1", "v2")
+        .write
+        .mode("overwrite")
+        .format("star")
+        .option("hashPartitions", "hash")
+        .option("hashBucketNum", "1")
+        .save(tableName)
+
+      val starTable = StarTable.forPath(tableName)
+      starTable.upsert(
+        Seq(("1", "12", "13"), ("2", "22", "23"), ("3", "32", "33")).toDF("hash", "v1", "v2")
+      )
+
+      val e = intercept[AnalysisException] {
+        starTable.toDF.select("v2")
+          .withColumn("v3", expr("stringOp(v2)"))
+          .withColumn("v4", expr("stringOp02(v2)"))
+      }
+      assert(e.getMessage().contains("has multi merge operators, but only one merge operator can be set"))
+
+    })
+
+
+  }
+
+
+  test("merge operator on different columns with multi level project should success"){
+    new MergeOpString().register(spark, "stringOp")
+    new MergeOpInt().register(spark, "intOp")
+
+    withTempDir(dir => {
+      val tableName = dir.getCanonicalPath
+      Seq(("range1", "1", "1", 1), ("range1", "2", "2", 2), ("range1", "3", "3", 3))
+        .toDF("range", "hash", "v1", "v2")
+        .write
+        .mode("overwrite")
+        .format("star")
+        .option("rangePartitions", "range")
+        .option("hashPartitions", "hash")
+        .option("hashBucketNum", "1")
+        .save(tableName)
+
+      val starTable = StarTable.forPath(tableName)
+      starTable.upsert(
+        Seq(("range1", "1", "12", 13), ("range1", "2", "22", 23), ("range1", "3", "32", 33))
+          .toDF("range", "hash", "v1", "v2")
+      )
+
+      val df = starTable.toDF.select("range", "hash", "v1", "v2")
+          .withColumn("v1", expr("stringOp(v1)"))
+        .withColumn("v2", expr("intOp(v2)"))
+        .select("range", "hash", "v1", "v2")
+      df.explain("extended")
+
+      checkAnswer(df.select("range", "hash", "v1", "v2"),
+        Seq(
+          ("range1", "1", "1,12", 14),
+          ("range1", "2", "2,22", 25),
+          ("range1", "3", "3,32", 36))
+          .toDF("range", "hash", "v1", "v2"))
+    })
+
+  }
+
+
+
+
+
 
 }
 

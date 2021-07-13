@@ -61,8 +61,9 @@ object CommitType {
     case "simple" | "SimpleCommit" => SimpleCommit
     case "delta" | "DeltaCommit" => DeltaCommit
     case "compaction" | "compact" | "CompactionCommit" => CompactionCommit
+    case "part_compaction" | "part_compact" | "PartCompaction" | "PartCompactionCommit" => PartCompactionCommit
     case _ =>
-      val supported = Seq("simple", "delta", "compaction", "compact")
+      val supported = Seq("simple", "delta", "compaction", "compact", "part_compaction", "part_compact")
       throw new IllegalArgumentException(s"Unsupported commit type '$typ'. " +
         "Supported commit types include: " + supported.mkString("'", "', '", "'") + ".")
   }
@@ -78,4 +79,8 @@ case object DeltaCommit extends CommitType {
 
 case object CompactionCommit extends CommitType {
   override def name: String = "CompactionCommit"
+}
+
+case object PartCompactionCommit extends CommitType {
+  override def name: String = "PartCompactionCommit"
 }
