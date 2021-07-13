@@ -334,12 +334,11 @@ class StarTable(df: => Dataset[Row], snapshotManagement: SnapshotManagement)
         } else {
           m._1
         }
-      val value =
-        if (m._2.isInstanceOf[MergeOperator[Any]]) {
-          m._2.getClass.getName
-        } else {
-          throw StarLakeErrors.illegalMergeOperatorException(m._2)
-        }
+      val value = m._2 match {
+        case cls: MergeOperator[Any] => cls.getClass.getName
+        case name: String => name
+        case _ => throw StarLakeErrors.illegalMergeOperatorException(m._2)
+      }
       (key, value)
     })
 
