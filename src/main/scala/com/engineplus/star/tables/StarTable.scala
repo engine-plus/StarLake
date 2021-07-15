@@ -480,5 +480,10 @@ object StarTable {
     }
   }
 
+  def isStarTable(tablePath: String): Boolean = {
+    StarLakeUtils.isStarLakeTable(tablePath)
+  }
+
+
 
 }
