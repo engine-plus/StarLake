@@ -25,6 +25,7 @@ import org.apache.spark.sql.catalyst.expressions.{Expression, PredicateHelper, S
 import org.apache.spark.sql.catalyst.planning.PhysicalOperation
 import org.apache.spark.sql.catalyst.plans.logical.LogicalPlan
 import org.apache.spark.sql.execution.datasources.LogicalRelation
+import org.apache.spark.sql.execution.datasources.v2.merge.parquet.batch.merge_operator.MergeOperator
 import org.apache.spark.sql.execution.datasources.v2.{DataSourceV2Relation, DataSourceV2ScanRelation}
 import org.apache.spark.sql.star.catalog.StarLakeTableV2
 import org.apache.spark.sql.star.exception.StarLakeErrors
@@ -39,6 +40,10 @@ object StarLakeUtils extends PredicateHelper {
 
   val MERGE_OP_COL = "_star_merge_col_name_"
   val MERGE_OP = "_star_merge_op_"
+
+  def getClass(className: String): Class[_] = {
+    Class.forName(className, true, Utils.getContextOrSparkClassLoader)
+  }
 
   /** return async class */
   def getAsyncClass(className: String): (Boolean, Class[_]) = {
@@ -222,5 +227,12 @@ object StarLakeTableV2ScanRelation {
       table,
       table.newScanBuilder(v2Relation.options).build(),
       v2Relation.output)
+  }
+}
+
+
+class MergeOpLong extends MergeOperator[Long]{
+  override def mergeData(input: Seq[Long]): Long = {
+    input.sum
   }
 }

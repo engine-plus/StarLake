@@ -319,6 +319,12 @@ class StarTable(df: => Dataset[Row], snapshotManagement: SnapshotManagement)
     compaction(condition, true, Map.empty[String, Any])
   }
 
+  def compaction(condition: String,
+                 force: Boolean,
+                 mergeOperatorInfo: java.util.Map[String, Any]): Unit = {
+    compaction(condition, force, mergeOperatorInfo.asScala.toMap)
+  }
+
   /**
     * If `force` set to true, it will ignore delta file num, compaction interval,
     * and base file(first write), compaction will execute if is_compacted is not true.
@@ -478,6 +484,18 @@ object StarTable {
     } else {
       throw StarLakeErrors.notAStarLakeTableException(StarLakeTableIdentifier(table = Some(tableIdent)))
     }
+  }
+
+  def isStarTable(tablePath: String): Boolean = {
+    StarLakeUtils.isStarLakeTable(tablePath)
+  }
+
+
+  def registerMergeOperator(spark: SparkSession, className: String, funName: String): Unit ={
+    StarLakeUtils.getClass(className).getConstructors()(0)
+      .newInstance()
+      .asInstanceOf[MergeOperator[Any]]
+      .register(spark, funName)
   }
 
 

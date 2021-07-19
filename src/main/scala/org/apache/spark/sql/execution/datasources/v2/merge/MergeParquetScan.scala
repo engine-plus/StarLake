@@ -164,14 +164,13 @@ abstract class MergeDeltaParquetScan(sparkSession: SparkSession,
       new SerializableConfiguration(hadoopConf))
 
     //get merge operator info
-    val allSchema = (readDataSchema ++ readPartitionSchema).map(m => (m.name, m.dataType)).toMap
-
+    val allSchema = (dataSchema ++ readPartitionSchema).map(_.name)
     val mergeOperatorInfo = options.keySet().asScala
       .filter(_.startsWith(StarLakeUtils.MERGE_OP_COL))
       .map(k => {
         val realColName = k.replaceFirst(StarLakeUtils.MERGE_OP_COL, "")
         assert(allSchema.contains(realColName),
-          s"merge column `$realColName` not found in [${allSchema.keys.mkString(",")}]")
+          s"merge column `$realColName` not found in [${allSchema.mkString(",")}]")
 
         val mergeClass = Class.forName(options.get(k), true, Utils.getContextOrSparkClassLoader).getConstructors()(0)
           .newInstance()
