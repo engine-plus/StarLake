@@ -14,13 +14,10 @@
 # limitations under the License.
 #
 
-import unittest
 import os
+import unittest
 
-from pyspark.sql import Row
 from pyspark.sql.functions import col, lit, expr
-from pyspark.sql.types import StructType, StructField, StringType, IntegerType, LongType
-from pyspark.sql.utils import AnalysisException, ParseException
 
 from star.tables import StarTable
 from star.testing.utils import StarTestCase
@@ -210,10 +207,10 @@ class StarTableTests(StarTestCase):
 
     def __overwriteHashStarTable(self, datalist):
         df = self.spark.createDataFrame(datalist, ["key", "value"])
-        df.write.format("star")\
-            .mode("overwrite")\
-            .option("hashPartitions", "key")\
-            .option("hashBucketNum", "2")\
+        df.write.format("star") \
+            .mode("overwrite") \
+            .option("hashPartitions", "key") \
+            .option("hashBucketNum", "2") \
             .save(self.tempFile)
 
     def __createFile(self, fileName, content):
@@ -227,6 +224,7 @@ class StarTableTests(StarTestCase):
 if __name__ == "__main__":
     try:
         import xmlrunner
+
         testRunner = xmlrunner.XMLTestRunner(output='target/test-reports', verbosity=4)
     except ImportError:
         testRunner = None

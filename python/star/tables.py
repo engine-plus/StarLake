@@ -14,12 +14,7 @@
 # limitations under the License.
 #
 
-import sys
-import tempfile
-from pyspark import SparkContext
-from pyspark import since
-from pyspark.sql import Column, DataFrame, SparkSession, SQLContext, functions
-from py4j.java_collections import MapConverter
+from pyspark.sql import Column, DataFrame, functions
 
 
 class StarTable(object):
@@ -28,6 +23,7 @@ class StarTable(object):
         You can create StarTable instances using the path of the Star table.::
             starTable = StarTable.forPath(spark, "/path/to/table")
     """
+
     def __init__(self, spark, jst):
         self._spark = spark
         self._jst = jst
@@ -291,8 +287,5 @@ class StarTable(object):
 
     @classmethod
     def registerMergeOperator(cls, sparkSession, class_name, fun_name):
-        return sparkSession._sc._jvm.com.engineplus.star.tables.StarTable\
+        return sparkSession._sc._jvm.com.engineplus.star.tables.StarTable \
             .registerMergeOperator(sparkSession._jsparkSession, class_name, fun_name)
-
-
-

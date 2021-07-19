@@ -164,7 +164,7 @@ abstract class MergeDeltaParquetScan(sparkSession: SparkSession,
       new SerializableConfiguration(hadoopConf))
 
     //get merge operator info
-    val allSchema = dataSchema.fieldNames
+    val allSchema = (dataSchema ++ readPartitionSchema).map(_.name)
     val mergeOperatorInfo = options.keySet().asScala
       .filter(_.startsWith(StarLakeUtils.MERGE_OP_COL))
       .map(k => {
