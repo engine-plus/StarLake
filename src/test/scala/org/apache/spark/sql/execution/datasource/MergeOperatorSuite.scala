@@ -28,6 +28,33 @@ class MergeOperatorSuite extends QueryTest
 
   import testImplicits._
 
+  test("read by defined merge operator - long type") {
+    StarTable.registerMergeOperator(spark, "org.apache.spark.sql.star.MergeOpLong", "longMOp")
+
+    withTempDir(dir => {
+      val tableName = dir.getCanonicalPath
+      Seq(("a", 1L), ("b", 2L), ("c", 3L)).toDF("hash", "value")
+        .write
+        .mode("overwrite")
+        .format("star")
+        .option("hashPartitions", "hash")
+        .option("hashBucketNum", "1")
+        .save(tableName)
+
+      val starTable = StarTable.forPath(tableName)
+      starTable.upsert(
+        Seq(("a", 11L), ("b", 22L), ("d", 44L)).toDF("hash", "value")
+      )
+
+      checkAnswer(
+        starTable.toDF.withColumn("value", expr("longMOp(value)"))
+          .select("hash", "value"),
+        Seq(("a", 12L), ("b", 24L), ("c", 3L), ("d", 44L)).toDF("hash", "value")
+      )
+
+    })
+  }
+
   test("read by defined merge operator - int type") {
     new MergeOpInt().register(spark, "intOp")
 

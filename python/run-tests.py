@@ -25,7 +25,6 @@ def test(root_dir):
     # Run all of the test under test/python directory, each of them
     # has main entry point to execute, which is python's unittest testing
     # framework.
-    package = "/mnt/e/maven/repository/com/engineplus/star-lake/1.0.0/star-lake-1.0.0.jar"
     python_root_dir = path.join(root_dir, "python")
     test_dir = path.join(python_root_dir, path.join("star", "tests"))
     test_files = [os.path.join(test_dir, f) for f in os.listdir(test_dir)
@@ -38,7 +37,7 @@ def test(root_dir):
             cmd = ["spark-submit",
                    "--driver-class-path=%s" % extra_class_path,
                    "--conf", "spark.engineplus.star.meta.database.name=test_star_meta",
-                   "--jars", package, test_file]
+                   test_file]
             print("Running tests in %s\n=============" % test_file)
             print("Command: %s" % str(cmd))
             run_cmd(cmd, stream_output=True)
@@ -52,21 +51,6 @@ def delete_if_exists(path):
     if os.path.exists(path):
         shutil.rmtree(path)
         print("Deleted %s " % path)
-
-
-# def prepare(root_dir):
-#     # Build package with python files in it
-#     sbt_path = path.join(root_dir, path.join("build", "sbt"))
-#     delete_if_exists(os.path.expanduser("~/.ivy2/cache/io.delta"))
-#     delete_if_exists(os.path.expanduser("~/.m2/repository/io/delta/"))
-#     run_cmd([sbt_path, "clean", "publishM2"], stream_output=True)
-#
-#     # Get current release which is required to be loaded
-#     version = '0.0.0'
-#     with open(os.path.join(root_dir, "version.sbt")) as fd:
-#         version = fd.readline().split('"')[1]
-#     package = "io.delta:delta-core_2.12:" + version
-#     return package
 
 
 def run_cmd(cmd, throw_on_error=True, env=None, stream_output=False, **kwargs):
@@ -94,10 +78,6 @@ def run_cmd(cmd, throw_on_error=True, env=None, stream_output=False, **kwargs):
                 "Non-zero exitcode: %s\n\nSTDOUT:\n%s\n\nSTDERR:%s" %
                 (exit_code, stdout, stderr))
         return exit_code, stdout, stderr
-
-
-# def run_python_style_checks(root_dir):
-#     run_cmd([os.path.join(root_dir, "dev", "lint-python")], stream_output=True)
 
 
 if __name__ == "__main__":

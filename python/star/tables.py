@@ -289,5 +289,10 @@ class StarTable(object):
 
         return jmo
 
+    @classmethod
+    def registerMergeOperator(cls, sparkSession, class_name, fun_name):
+        return sparkSession._sc._jvm.com.engineplus.star.tables.StarTable\
+            .registerMergeOperator(sparkSession._jsparkSession, class_name, fun_name)
+
 
 

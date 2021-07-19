@@ -30,8 +30,8 @@ class StarTableTests(StarTestCase):
 
     def test_forPath(self):
         self.__writeStarTable([('a', 1), ('b', 2), ('c', 3)])
-        dt = StarTable.forPath(self.spark, self.tempFile).toDF()
-        self.__checkAnswer(dt, [('a', 1), ('b', 2), ('c', 3)])
+        table = StarTable.forPath(self.spark, self.tempFile).toDF()
+        self.__checkAnswer(table, [('a', 1), ('b', 2), ('c', 3)])
 
     def test_forName(self):
         self.__writeAsTable([('a', 1), ('b', 2), ('c', 3)], "test")
@@ -40,90 +40,90 @@ class StarTableTests(StarTestCase):
 
     def test_alias_and_toDF(self):
         self.__writeStarTable([('a', 1), ('b', 2), ('c', 3)])
-        dt = StarTable.forPath(self.spark, self.tempFile).toDF()
+        table = StarTable.forPath(self.spark, self.tempFile).toDF()
         self.__checkAnswer(
-            dt.alias("myTable").select('myTable.key', 'myTable.value'),
+            table.alias("myTable").select('myTable.key', 'myTable.value'),
             [('a', 1), ('b', 2), ('c', 3)])
 
     def test_delete(self):
         self.__writeStarTable([('a', 1), ('b', 2), ('c', 3), ('d', 4)])
-        dt = StarTable.forPath(self.spark, self.tempFile)
+        table = StarTable.forPath(self.spark, self.tempFile)
 
         # delete with condition as str
-        dt.delete("key = 'a'")
-        self.__checkAnswer(dt.toDF(), [('b', 2), ('c', 3), ('d', 4)])
+        table.delete("key = 'a'")
+        self.__checkAnswer(table.toDF(), [('b', 2), ('c', 3), ('d', 4)])
 
         # delete with condition as Column
-        dt.delete(col("key") == lit("b"))
-        self.__checkAnswer(dt.toDF(), [('c', 3), ('d', 4)])
+        table.delete(col("key") == lit("b"))
+        self.__checkAnswer(table.toDF(), [('c', 3), ('d', 4)])
 
         # delete without condition
-        dt.delete()
-        self.__checkAnswer(dt.toDF(), [])
+        table.delete()
+        self.__checkAnswer(table.toDF(), [])
 
         # bad args
         with self.assertRaises(TypeError):
-            dt.delete(condition=1)
+            table.delete(condition=1)
 
     def test_update(self):
         self.__writeStarTable([('a', 1), ('b', 2), ('c', 3), ('d', 4)])
-        dt = StarTable.forPath(self.spark, self.tempFile)
+        table = StarTable.forPath(self.spark, self.tempFile)
 
         # update with condition as str and with set exprs as str
-        dt.update("key = 'a' or key = 'b'", {"value": "1"})
-        self.__checkAnswer(dt.toDF(), [('a', 1), ('b', 1), ('c', 3), ('d', 4)])
+        table.update("key = 'a' or key = 'b'", {"value": "1"})
+        self.__checkAnswer(table.toDF(), [('a', 1), ('b', 1), ('c', 3), ('d', 4)])
 
         # update with condition as Column and with set exprs as Columns
-        dt.update(expr("key = 'a' or key = 'b'"), {"value": expr("0")})
-        self.__checkAnswer(dt.toDF(), [('a', 0), ('b', 0), ('c', 3), ('d', 4)])
+        table.update(expr("key = 'a' or key = 'b'"), {"value": expr("0")})
+        self.__checkAnswer(table.toDF(), [('a', 0), ('b', 0), ('c', 3), ('d', 4)])
 
         # update without condition
-        dt.update(set={"value": "200"})
-        self.__checkAnswer(dt.toDF(), [('a', 200), ('b', 200), ('c', 200), ('d', 200)])
+        table.update(set={"value": "200"})
+        self.__checkAnswer(table.toDF(), [('a', 200), ('b', 200), ('c', 200), ('d', 200)])
 
         # bad args
         with self.assertRaisesRegex(ValueError, "cannot be None"):
-            dt.update({"value": "200"})
+            table.update({"value": "200"})
 
         with self.assertRaisesRegex(ValueError, "cannot be None"):
-            dt.update(condition='a')
+            table.update(condition='a')
 
         with self.assertRaisesRegex(TypeError, "must be a dict"):
-            dt.update(set=1)
+            table.update(set=1)
 
         with self.assertRaisesRegex(TypeError, "must be a Spark SQL Column or a string"):
-            dt.update(1, {})
+            table.update(1, {})
 
         with self.assertRaisesRegex(TypeError, "Values of dict in .* must contain only"):
-            dt.update(set={"value": 1})
+            table.update(set={"value": 1})
 
         with self.assertRaisesRegex(TypeError, "Keys of dict in .* must contain only"):
-            dt.update(set={1: ""})
+            table.update(set={1: ""})
 
         with self.assertRaises(TypeError):
-            dt.update(set=1)
+            table.update(set=1)
 
     def test_upsert(self):
         self.__overwriteHashStarTable([('a', 1), ('b', 2), ('c', 3), ('d', 4)])
         source = self.spark.createDataFrame([('a', -1), ('b', 0), ('e', -5), ('f', -6)], ["key", "value"])
 
-        dt = StarTable.forPath(self.spark, self.tempFile)
-        dt.upsert(source._jdf)
-        self.__checkAnswer(dt.toDF(),
+        table = StarTable.forPath(self.spark, self.tempFile)
+        table.upsert(source._jdf)
+        self.__checkAnswer(table.toDF(),
                            ([('a', -1), ('b', 0), ('c', 3), ('d', 4), ('e', -5), ('f', -6)]))
 
     def test_cleanup(self):
         self.__writeStarTable([('a', 1), ('b', 2), ('c', 3)])
-        dt = StarTable.forPath(self.spark, self.tempFile)
+        table = StarTable.forPath(self.spark, self.tempFile)
         self.__createFile('abc.txt', 'abcde')
         self.__createFile('bac.txt', 'abcdf')
         self.assertEqual(True, self.__checkFileExists('abc.txt'))
-        dt.cleanup()  # will not delete files as default retention is used.
+        table.cleanup()  # will not delete files as default retention is used.
 
         self.assertEqual(True, self.__checkFileExists('bac.txt'))
         retentionConf = "spark.engineplus.star.cleanup.interval"
         self.spark.conf.set(retentionConf, "0")
-        dt.cleanup()
+        table.cleanup()
         self.assertEqual(False, self.__checkFileExists('bac.txt'))
         self.assertEqual(False, self.__checkFileExists('abc.txt'))
 
@@ -146,6 +146,38 @@ class StarTableTests(StarTestCase):
         self.__writeStarTable([('a', 1), ('b', 2), ('c', 3)])
         StarTable.forPath(self.spark, self.tempFile).dropTable()
         self.assertEqual(StarTable.isStarTable(self.spark, self.tempFile), False)
+
+    def test_compaction(self):
+        self.__overwriteHashStarTable([('a', 1), ('b', 2), ('c', 3), ('d', 4)])
+        table = StarTable.forPath(self.spark, self.tempFile)
+        df = self.spark.createDataFrame([('a', 11), ('b', 22), ('e', 55), ('f', 66)], ["key", "value"])
+        table.upsert(df._jdf)
+        table.compaction()
+        self.__checkAnswer(table.toDF().select("key", "value"),
+                           ([('a', 11), ('b', 22), ('c', 3), ('d', 4), ('e', 55), ('f', 66)]))
+
+    def test_compaction_with_merge_operator(self):
+        self.__overwriteHashStarTable([('a', 1), ('b', 2), ('c', 3), ('d', 4)])
+        table = StarTable.forPath(self.spark, self.tempFile)
+        df = self.spark.createDataFrame([('a', 11), ('b', 22), ('e', 55), ('f', 66)], ["key", "value"])
+        table.upsert(df._jdf)
+        merge_info = {"value": "org.apache.spark.sql.star.MergeOpLong"}
+        table.compaction(mergeOperatorInfo=merge_info)
+        self.__checkAnswer(table.toDF().select("key", "value"),
+                           ([('a', 12), ('b', 24), ('c', 3), ('d', 4), ('e', 55), ('f', 66)]))
+
+    def test_read_with_merge_operator(self):
+        self.__overwriteHashStarTable([('a', 1), ('b', 2), ('c', 3), ('d', 4)])
+        table = StarTable.forPath(self.spark, self.tempFile)
+        df = self.spark.createDataFrame([('a', 11), ('b', 22), ('e', 55), ('f', 66)], ["key", "value"])
+        table.upsert(df._jdf)
+
+        StarTable.registerMergeOperator(self.spark, "org.apache.spark.sql.star.MergeOpLong", "long_op")
+        re = table.toDF().withColumn("value", expr("long_op(value)"))
+        print(str(re.schema))
+        print(re.explain(True))
+        self.__checkAnswer(re.select("key", "value"),
+                           ([('a', 12), ('b', 24), ('c', 3), ('d', 4), ('e', 55), ('f', 66)]))
 
     def __checkAnswer(self, df, expectedAnswer, schema=["key", "value"]):
         if not expectedAnswer:
