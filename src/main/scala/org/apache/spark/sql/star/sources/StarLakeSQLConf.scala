@@ -123,6 +123,24 @@ object StarLakeSQLConf {
       .stringConf
       .createWithDefault("com.engineplus.star.meta.CustomConnectionFactory")
 
+  val META_CONNECT_TIMEOUT: ConfigEntry[Int] =
+    buildConf("meta.connect.timeout")
+      .doc(
+        """
+          |Timeout for connecting to cassandra, default is 60s.
+        """.stripMargin)
+      .intConf
+      .createWithDefault(60 * 1000)
+
+  val META_READ_TIMEOUT: ConfigEntry[Int] =
+    buildConf("meta.read.timeout")
+      .doc(
+        """
+          |Timeout for reading to cassandra, default is 30s.
+        """.stripMargin)
+      .intConf
+      .createWithDefault(30 * 1000)
+
   val META_MAX_CONNECT_PER_EXECUTOR: ConfigEntry[Int] =
     buildConf("meta.connections_per_executor_max")
       .doc(
