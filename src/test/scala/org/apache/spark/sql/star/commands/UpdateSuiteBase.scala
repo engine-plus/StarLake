@@ -62,7 +62,6 @@ abstract class UpdateSuiteBase
     try {
       Utils.deleteRecursively(tempDir)
       try {
-        snapshotManagement.updateSnapshot()
         StarTable.forPath(snapshotManagement.table_name).dropTable()
       } catch {
         case e: Exception =>

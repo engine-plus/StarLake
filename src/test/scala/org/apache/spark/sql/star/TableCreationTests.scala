@@ -560,7 +560,7 @@ trait TableCreationTests
     }
   }
 
-  test("failed to create a table and then able to recreate it") {
+  test("failed to create a table and then can able to recreate it") {
     withTable("star_test") {
       val e = intercept[AnalysisException] {
         sql("CREATE TABLE star_test USING star")

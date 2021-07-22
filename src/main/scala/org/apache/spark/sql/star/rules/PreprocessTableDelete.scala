@@ -29,7 +29,7 @@ import org.apache.spark.sql.star.exception.StarLakeErrors
 /**
   * Preprocess the [[StarDelete]] plan to convert to [[DeleteCommand]].
   */
-case class PreprocessTableDelete(conf: SQLConf) extends Rule[LogicalPlan] {
+case class PreprocessTableDelete(sqlConf: SQLConf) extends Rule[LogicalPlan] {
 
   override def apply(plan: LogicalPlan): LogicalPlan = {
     plan.resolveOperators {

@@ -44,7 +44,7 @@ trait MergeOperator[T] extends Serializable {
     val f = (data: String) => data
     val ScalaReflection.Schema(dataType, nullable) = ScalaReflection.schemaFor[String]
     val inputEncoders = Try(ExpressionEncoder[String]()).toOption :: Nil
-    val udf = SparkUserDefinedFunction(f, dataType, inputEncoders, Option(s"${StarLakeUtils.MERGE_OP}$name"))
+    val udf = SparkUserDefinedFunction(f, dataType, inputEncoders, None, Option(s"${StarLakeUtils.MERGE_OP}$name"))
     if (nullable) udf else udf.asNonNullable()
   }
 

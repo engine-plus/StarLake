@@ -1202,7 +1202,6 @@ trait AlterTableByPathTests extends AlterTableTestBase {
 
   override protected def dropTable(identifier: String): Unit = {
     StarTable.forPath(identifier.stripPrefix("star.`").stripSuffix("`")).dropTable()
-    Utils.deleteRecursively(new File(identifier.stripPrefix("star.`").stripSuffix("`")))
   }
 
   override protected def getSnapshotManagement(identifier: String): SnapshotManagement = {

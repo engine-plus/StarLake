@@ -25,7 +25,7 @@ import org.apache.spark.sql.catalyst.plans.physical.{HashPartitioning, Partition
 import org.apache.spark.sql.execution._
 import org.apache.spark.sql.execution.datasources.v2.merge.{MultiPartitionMergeBucketScan, OnePartitionMergeBucketScan}
 import org.apache.spark.sql.execution.datasources.v2.parquet.BucketParquetScan
-import org.apache.spark.sql.execution.datasources.v2.{BatchScanExec, DataSourceV2ScanRelation}
+import org.apache.spark.sql.execution.datasources.v2.{BatchScanExec, DataSourceV2Relation, DataSourceV2ScanRelation}
 import org.apache.spark.sql.star.catalog.StarLakeTableV2
 import org.apache.spark.sql.util.CaseInsensitiveStringMap
 import org.apache.spark.sql.{SparkSession, Strategy}
@@ -52,7 +52,10 @@ case class SetPartitionAndOrdering(session: SparkSession)
   override def apply(plan: LogicalPlan): Seq[SparkPlan] = plan match {
 
     case PhysicalOperation(project, filters,
-    relation@DataSourceV2ScanRelation(tbl: StarLakeTableV2, bucketScan: BucketParquetScan, output)) =>
+    relation@DataSourceV2ScanRelation(
+    DataSourceV2Relation(tbl: StarLakeTableV2, _, _, _, _),
+    bucketScan: BucketParquetScan,
+    output)) =>
       // projection and filters were already pushed down in the optimizer.
       // this uses PhysicalOperation to get the projection and ensure that if the batch scan does
       // not support columnar, a projection is added to convert the rows to UnsafeRow.
@@ -73,7 +76,7 @@ case class SetPartitionAndOrdering(session: SparkSession)
 
     case PhysicalOperation(project, filters,
     relation@DataSourceV2ScanRelation(
-    tbl: StarLakeTableV2,
+    DataSourceV2Relation(tbl: StarLakeTableV2, _, _, _, _),
     mergeScan@OnePartitionMergeBucketScan(_, _, _, _, _, _, _, options: CaseInsensitiveStringMap, _, _, _),
     output)) =>
       // projection and filters were already pushed down in the optimizer.
@@ -113,7 +116,7 @@ case class SetPartitionAndOrdering(session: SparkSession)
 
     case PhysicalOperation(project, filters,
     relation@DataSourceV2ScanRelation(
-    tbl: StarLakeTableV2,
+    DataSourceV2Relation(tbl: StarLakeTableV2, _, _, _, _),
     mergeScan@MultiPartitionMergeBucketScan(_, _, _, _, _, _, _, options: CaseInsensitiveStringMap, _, _, _),
     output)) =>
       // projection and filters were already pushed down in the optimizer.

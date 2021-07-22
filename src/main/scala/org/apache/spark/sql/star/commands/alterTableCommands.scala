@@ -173,18 +173,11 @@ case class AlterTableAddColumnsCommand(
   }
 
   object QualifiedColTypeWithPosition {
-
-    def unapply(
-                 col: QualifiedColType): Option[(Seq[String], StructField, Option[ColumnPosition])] = {
+    def unapply(col: QualifiedColType): Option[(Seq[String], StructField, Option[ColumnPosition])] = {
       val builder = new MetadataBuilder
       col.comment.foreach(builder.putString("comment", _))
 
-      val cleanedDataType = HiveStringType.replaceCharType(col.dataType)
-      if (col.dataType != cleanedDataType) {
-        builder.putString(HIVE_TYPE_STRING, col.dataType.catalogString)
-      }
-
-      val field = StructField(col.name.last, cleanedDataType, col.nullable, builder.build())
+      val field = StructField(col.name.last, col.dataType, col.nullable, builder.build())
 
       Some((col.name.init, field, col.position))
     }

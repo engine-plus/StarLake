@@ -27,7 +27,7 @@ import org.apache.spark.internal.Logging
 import org.apache.spark.sql.catalyst.TableIdentifier
 import org.apache.spark.sql.catalyst.expressions.Expression
 import org.apache.spark.sql.catalyst.plans.logical.AnalysisHelper
-import org.apache.spark.sql.execution.datasources.v2.DataSourceV2ScanRelation
+import org.apache.spark.sql.execution.datasources.v2.DataSourceV2Relation
 import org.apache.spark.sql.execution.datasources.{HadoopFsRelation, LogicalRelation}
 import org.apache.spark.sql.functions._
 import org.apache.spark.sql.sources.BaseRelation
@@ -200,12 +200,15 @@ class SnapshotManagement(path: String) extends Logging {
         Option(fileIndex)
       )
       val option = new CaseInsensitiveStringMap(Map("basePath" -> table_name).asJava)
+
       Dataset.ofRows(
         spark,
-        DataSourceV2ScanRelation(
+        DataSourceV2Relation(
           table,
-          table.newScanBuilder(option).build(),
-          table.schema().toAttributes
+          table.schema().toAttributes,
+          None,
+          None,
+          option
         )
       ).select(requiredColumns.map(col): _*)
     }

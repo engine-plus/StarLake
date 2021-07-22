@@ -33,7 +33,7 @@ import org.apache.spark.sql.star.{StarLakeTableRelationV2, UpdateExpressionsSupp
   * into account that the specified SET clause may only update some columns or nested fields of
   * columns.
   */
-case class PreprocessTableUpdate(conf: SQLConf)
+case class PreprocessTableUpdate(sqlConf: SQLConf)
   extends Rule[LogicalPlan] with UpdateExpressionsSupport {
 
   override def apply(plan: LogicalPlan): LogicalPlan = plan.resolveOperators {

@@ -42,6 +42,8 @@ object MetaUtils extends Logging {
   lazy val DATA_BASE: String = sqlConf.getConf(StarLakeSQLConf.META_DATABASE_NAME)
   lazy val META_USERNAME: String = sqlConf.getConf(StarLakeSQLConf.META_USERNAME)
   lazy val META_PASSWORD: String = sqlConf.getConf(StarLakeSQLConf.META_PASSWORD)
+  lazy val META_CONNECT_TIMEOUT: Int = sqlConf.getConf(StarLakeSQLConf.META_CONNECT_TIMEOUT)
+  lazy val META_READ_TIMEOUT: Int = sqlConf.getConf(StarLakeSQLConf.META_READ_TIMEOUT)
   lazy val GET_LOCK_MAX_ATTEMPTS: Int = sqlConf.getConf(StarLakeSQLConf.META_GET_LOCK_MAX_ATTEMPTS)
   lazy val WAIT_LOCK_INTERVAL: Int = sqlConf.getConf(StarLakeSQLConf.META_GET_LOCK_WAIT_INTERVAL)
   lazy val RETRY_LOCK_INTERVAL: Int = sqlConf.getConf(StarLakeSQLConf.META_GET_LOCK_RETRY_INTERVAL)

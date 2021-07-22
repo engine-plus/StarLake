@@ -35,7 +35,7 @@ import org.apache.spark.sql.types.{DataType, StructField, StructType}
   * Analysis rules for StarLake. Currently, these rules enable schema enforcement / evolution with
   * INSERT INTO.
   */
-case class StarLakeAnalysis(session: SparkSession, conf: SQLConf)
+case class StarLakeAnalysis(session: SparkSession, sqlConf: SQLConf)
   extends Rule[LogicalPlan] with AnalysisHelper with Logging {
 
   type CastFunction = (Expression, DataType) => Expression

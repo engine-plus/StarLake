@@ -13,17 +13,22 @@
         <maven.compiler.encoding>UTF-8</maven.compiler.encoding>
         <scala.version>2.12.10</scala.version>
         <scala.binary.version>2.12</scala.binary.version>
-        <spark.version>3.0.1</spark.version>
-        <scalatest.version>3.0.8</scalatest.version>
+        <spark.version>3.1.1</spark.version>
+        <scalatest.version>3.1.0</scalatest.version>
         <hive.version>0.13.0</hive.version>
         <parquet.version>1.11.0</parquet.version>
-        <local.scope>compile</local.scope>
+        <local.scope>provided</local.scope>
         <spark.cassandra.connector.version>2.4.3</spark.cassandra.connector.version>
     </properties>
 
 
     <dependencies>
 
+        <dependency>
+            <groupId>com.google.guava</groupId>
+            <artifactId>guava</artifactId>
+            <version>16.0.1</version>
+        </dependency>
 
         <dependency>
             <groupId>com.datastax.spark</groupId>
@@ -66,16 +71,16 @@
             <artifactId>spark-core_${scala.binary.version}</artifactId>
             <version>${spark.version}</version>
             <scope>${local.scope}</scope>
-            <exclusions>
-                <exclusion>
-                    <artifactId>scala-library</artifactId>
-                    <groupId>org.scala-lang</groupId>
-                </exclusion>
-                <exclusion>
-                    <artifactId>netty-all</artifactId>
-                    <groupId>io.netty</groupId>
-                </exclusion>
-            </exclusions>
+<!--            <exclusions>-->
+<!--                <exclusion>-->
+<!--                    <artifactId>scala-library</artifactId>-->
+<!--                    <groupId>org.scala-lang</groupId>-->
+<!--                </exclusion>-->
+<!--                <exclusion>-->
+<!--                    <artifactId>netty-all</artifactId>-->
+<!--                    <groupId>io.netty</groupId>-->
+<!--                </exclusion>-->
+<!--            </exclusions>-->
         </dependency>
 
         <dependency>
@@ -194,6 +199,12 @@
             <artifactId>spark-core_${scala.binary.version}</artifactId>
             <version>${spark.version}</version>
             <scope>test</scope>
+            <exclusions>
+                <exclusion>
+                    <artifactId>guava</artifactId>
+                    <groupId>com.google.guava</groupId>
+                </exclusion>
+            </exclusions>
             <classifier>tests</classifier>
         </dependency>
         <dependency>
@@ -201,6 +212,12 @@
             <artifactId>spark-hive_${scala.binary.version}</artifactId>
             <version>${spark.version}</version>
             <scope>test</scope>
+            <exclusions>
+                <exclusion>
+                    <artifactId>guava</artifactId>
+                    <groupId>com.google.guava</groupId>
+                </exclusion>
+            </exclusions>
             <classifier>tests</classifier>
         </dependency>
 

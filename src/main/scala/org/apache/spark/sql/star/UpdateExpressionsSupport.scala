@@ -16,6 +16,7 @@
 
 package org.apache.spark.sql.star
 
+import org.apache.spark.sql.catalyst.SQLConfHelper
 import org.apache.spark.sql.catalyst.analysis.{CastSupport, Resolver}
 import org.apache.spark.sql.catalyst.expressions.{Alias, CreateNamedStruct, Expression, GetStructField, Literal, NamedExpression}
 import org.apache.spark.sql.star.exception.StarLakeErrors
@@ -25,7 +26,7 @@ import org.apache.spark.sql.types._
   * Trait with helper functions to generate expressions to update target columns, even if they are
   * nested fields.
   */
-trait UpdateExpressionsSupport extends CastSupport {
+trait UpdateExpressionsSupport extends CastSupport with SQLConfHelper {
 
   /**
     * Specifies an operation that updates a target column with the given expression.
