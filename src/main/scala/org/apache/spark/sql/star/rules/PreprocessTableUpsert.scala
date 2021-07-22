@@ -26,7 +26,7 @@ import org.apache.spark.sql.star.commands.UpsertCommand
 import org.apache.spark.sql.star.exception.StarLakeErrors
 import org.apache.spark.sql.star.{StarLakeTableRelationV2, UpdateExpressionsSupport}
 
-case class PreprocessTableUpsert(conf: SQLConf)
+case class PreprocessTableUpsert(sqlConf: SQLConf)
   extends Rule[LogicalPlan] with UpdateExpressionsSupport {
 
   override def apply(plan: LogicalPlan): LogicalPlan = plan.resolveOperators {

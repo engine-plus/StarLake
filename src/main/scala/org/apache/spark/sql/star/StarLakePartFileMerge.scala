@@ -18,7 +18,7 @@ package org.apache.spark.sql.star
 
 import org.apache.hadoop.fs.Path
 import org.apache.spark.sql.{Dataset, SparkSession}
-import org.apache.spark.sql.execution.datasources.v2.DataSourceV2ScanRelation
+import org.apache.spark.sql.execution.datasources.v2.{DataSourceV2Relation, DataSourceV2ScanRelation}
 import org.apache.spark.sql.star.catalog.StarLakeTableV2
 import org.apache.spark.sql.star.exception.{MetaRerunException, StarLakeErrors}
 import org.apache.spark.sql.star.sources.StarLakeSQLConf
@@ -124,10 +124,12 @@ object StarLakePartFileMerge {
 
     val compactDF = Dataset.ofRows(
       spark,
-      DataSourceV2ScanRelation(
+      DataSourceV2Relation(
         table,
-        table.newScanBuilder(option).build(),
-        table.schema().toAttributes
+        table.schema().toAttributes,
+        None,
+        None,
+        option
       )
     )
 

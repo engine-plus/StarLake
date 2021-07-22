@@ -483,18 +483,6 @@ class StarLakeCatalog(val spark: SparkSession) extends DelegatingCatalogExtensio
   }
 
 
-  override def dropTable(ident: Identifier): Boolean = {
-    val table = loadTable(ident) match {
-      case starTable: StarLakeTableV2 => starTable
-      case _ => return super.dropTable(ident)
-    }
-
-    StarTable.forPath(table.snapshotManagement.table_name).dropTable()
-    super.dropTable(ident)
-
-  }
-
-
 }
 
 /**

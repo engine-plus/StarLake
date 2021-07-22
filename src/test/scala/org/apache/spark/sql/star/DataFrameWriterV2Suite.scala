@@ -108,7 +108,7 @@ trait DataFrameWriterV2Tests
   }
 
   test("Append: fail if table does not exist") {
-    val exc = intercept[NoSuchTableException] {
+    val exc = intercept[AnalysisException] {
       spark.table("source").writeTo("table_name").append()
     }
 
@@ -174,7 +174,7 @@ trait DataFrameWriterV2Tests
   }
 
   test("Overwrite: fail if table does not exist") {
-    val exc = intercept[NoSuchTableException] {
+    val exc = intercept[AnalysisException] {
       spark.table("source").writeTo("table_name").overwrite(lit(true))
     }
 
@@ -239,7 +239,7 @@ trait DataFrameWriterV2Tests
   }
 
   test("OverwritePartitions: fail if table does not exist") {
-    val exc = intercept[NoSuchTableException] {
+    val exc = intercept[AnalysisException] {
       spark.table("source").writeTo("table_name").overwritePartitions()
     }
 

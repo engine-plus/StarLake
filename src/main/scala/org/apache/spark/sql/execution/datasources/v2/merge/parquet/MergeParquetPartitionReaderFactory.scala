@@ -125,11 +125,13 @@ case class MergeParquetPartitionReaderFactory(sqlConf: SQLConf,
                                      hadoopAttemptContext: TaskAttemptContextImpl,
                                      pushed: Option[FilterPredicate],
                                      convertTz: Option[ZoneId],
-                                     datetimeRebaseMode: LegacyBehaviorPolicy.Value): VectorizedParquetRecordReader = {
+                                     datetimeRebaseMode: LegacyBehaviorPolicy.Value,
+                                     int96RebaseMode: LegacyBehaviorPolicy.Value): VectorizedParquetRecordReader = {
     val taskContext = Option(TaskContext.get())
     val vectorizedReader = new VectorizedParquetRecordReader(
       convertTz.orNull,
       datetimeRebaseMode.toString,
+      int96RebaseMode.toString,
       enableOffHeapColumnVector && taskContext.isDefined,
       capacity)
     val iter = new RecordReaderIterator(vectorizedReader)
@@ -143,6 +145,7 @@ case class MergeParquetPartitionReaderFactory(sqlConf: SQLConf,
                                  buildReaderFunc: (
                                    ParquetInputSplit, InternalRow, TaskAttemptContextImpl,
                                      Option[FilterPredicate], Option[ZoneId],
+                                     LegacyBehaviorPolicy.Value,
                                      LegacyBehaviorPolicy.Value) => RecordReader[Void, T]): RecordReader[Void, T] = {
     val conf = broadcastedConf.value.value
 
@@ -201,8 +204,11 @@ case class MergeParquetPartitionReaderFactory(sqlConf: SQLConf,
     val datetimeRebaseMode = DataSourceUtils.datetimeRebaseMode(
       footerFileMetaData.getKeyValueMetaData.get,
       SQLConf.get.getConf(SQLConf.LEGACY_PARQUET_REBASE_MODE_IN_READ))
+    val int96RebaseMode = DataSourceUtils.int96RebaseMode(
+      footerFileMetaData.getKeyValueMetaData.get,
+      SQLConf.get.getConf(SQLConf.LEGACY_PARQUET_INT96_REBASE_MODE_IN_READ))
     val reader = buildReaderFunc(
-      split, file.partitionValues, hadoopAttemptContext, pushed, convertTz, datetimeRebaseMode)
+      split, file.partitionValues, hadoopAttemptContext, pushed, convertTz, datetimeRebaseMode, int96RebaseMode)
     reader.initialize(split, hadoopAttemptContext)
     reader
   }

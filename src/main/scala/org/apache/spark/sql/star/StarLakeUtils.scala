@@ -211,7 +211,7 @@ object StarLakeFullTable {
 object StarLakeTableRelationV2 {
   def unapply(plan: LogicalPlan): Option[StarLakeTableV2] = plan match {
     case DataSourceV2Relation(table: StarLakeTableV2, _, _, _, _) => Some(table)
-    case DataSourceV2ScanRelation(table: StarLakeTableV2, _, _) => Some(table)
+    case DataSourceV2ScanRelation(DataSourceV2Relation(table: StarLakeTableV2, _, _, _, _), _, _) => Some(table)
     case _ => None
   }
 }
@@ -224,7 +224,7 @@ object StarLakeTableV2ScanRelation {
 
   def createScanRelation(table: StarLakeTableV2, v2Relation: DataSourceV2Relation): DataSourceV2ScanRelation = {
     DataSourceV2ScanRelation(
-      table,
+      v2Relation,
       table.newScanBuilder(v2Relation.options).build(),
       v2Relation.output)
   }
