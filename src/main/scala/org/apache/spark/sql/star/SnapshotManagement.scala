@@ -21,7 +21,7 @@ import java.util.concurrent.TimeUnit
 import java.util.concurrent.locks.ReentrantLock
 
 import com.engineplus.star.meta.{MetaUtils, MetaVersion}
-import com.google.common.cache.CacheBuilder
+import com.google.common.cache.{CacheBuilder, RemovalNotification}
 import org.apache.hadoop.fs.Path
 import org.apache.spark.internal.Logging
 import org.apache.spark.sql.catalyst.TableIdentifier
@@ -94,6 +94,7 @@ class SnapshotManagement(path: String) extends Logging {
   def updateSnapshot(): Snapshot = {
     lockInterruptibly {
       val new_snapshot = getCurrentSnapshot
+      currentSnapshot.uncache()
       currentSnapshot = new_snapshot
       currentSnapshot
     }
@@ -236,6 +237,13 @@ object SnapshotManagement {
   private val snapshotManagementCache = {
     val builder = CacheBuilder.newBuilder()
       .expireAfterAccess(60, TimeUnit.MINUTES)
+      .removalListener((removalNotification: RemovalNotification[String, SnapshotManagement]) => {
+        val snapshotManagement = removalNotification.getValue
+        try snapshotManagement.snapshot.uncache() catch {
+          case _: java.lang.NullPointerException =>
+          // Various layers will throw null pointer if the RDD is already gone.
+        }
+      })
 
     builder.maximumSize(5).build[String, SnapshotManagement]()
   }

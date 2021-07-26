@@ -33,7 +33,7 @@ import scala.util.control.NonFatal
 object MetaUtils extends Logging {
 
   private def spark: SparkSession = SparkSession.active
-  lazy val sqlConf: SQLConf = spark.sessionState.conf
+  def sqlConf: SQLConf = spark.sessionState.conf
 
   lazy val DEFAULT_RANGE_PARTITION_VALUE: String = "-5"
   lazy val UNDO_LOG_DEFAULT_VALUE: String = "-5"
