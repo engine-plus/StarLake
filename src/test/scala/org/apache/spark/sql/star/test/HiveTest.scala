@@ -21,6 +21,7 @@ import org.apache.spark.sql.SparkSession
 import org.apache.spark.sql.hive.test.{TestHive, TestHiveContext}
 import org.apache.spark.sql.internal.{SQLConf, StaticSQLConf}
 import org.apache.spark.sql.star.catalog.StarLakeCatalog
+import org.apache.spark.sql.star.sources.StarLakeSQLConf
 import org.apache.spark.sql.test.SQLTestUtils
 import org.apache.spark.{SparkContext, SparkFunSuite}
 import org.scalatest.BeforeAndAfterAll
@@ -43,6 +44,7 @@ trait HiveTest extends SparkFunSuite with BeforeAndAfterAll {
     conf.set(SQLConf.V2_SESSION_CATALOG_IMPLEMENTATION.key, classOf[StarLakeCatalog].getName)
     conf.set(StaticSQLConf.SPARK_SESSION_EXTENSIONS.key,
       classOf[StarSparkSessionExtension].getName)
+    conf.set(StarLakeSQLConf.META_DATABASE_NAME.key, "test_star_meta")
 
     _sc = new SparkContext("local", this.getClass.getName, conf)
     _hiveContext = new TestHiveContext(_sc)
