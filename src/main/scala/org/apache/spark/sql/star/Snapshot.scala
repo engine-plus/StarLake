@@ -19,6 +19,7 @@ package org.apache.spark.sql.star
 import com.engineplus.star.meta.{DataOperation, MetaUtils}
 import org.apache.spark.sql.execution.datasources.FileFormat
 import org.apache.spark.sql.execution.datasources.parquet.ParquetFileFormat
+import org.apache.spark.sql.functions.sum
 import org.apache.spark.sql.star.utils.{DataFileInfo, PartitionFilterInfo, PartitionInfo, TableInfo}
 import org.apache.spark.sql.{DataFrame, Dataset, SparkSession}
 
@@ -33,28 +34,35 @@ class Snapshot(table_info: TableInfo,
 
   def getTableInfo: TableInfo = table_info
 
-  lazy val allDataInfo: Array[DataFileInfo] = DataOperation.getTableDataInfo(partition_info_arr)
-
-  lazy val allPartitionFilterInfo: Seq[PartitionFilterInfo] = {
-    partition_info_arr
-      .map(part =>
-        PartitionFilterInfo(
-          part.range_id,
-          part.range_value,
-          MetaUtils.getPartitionMapFromKey(part.range_value)))
+  def allDataInfo: Array[DataFileInfo] = {
+    import spark.implicits._
+    allDataInfoDS.as[DataFileInfo].collect()
   }
 
-  def allDataInfoDS: Dataset[DataFileInfo] = {
-    import spark.implicits._
-    spark.sparkContext.parallelize(allDataInfo).toDS()
-  }
+  private var dataInfoCached: Boolean = false
+  private var partitionFilterInfoCached: Boolean = false
 
-  def allPartitionFilterInfoDF: DataFrame = {
+  lazy val allDataInfoDS: Dataset[DataFileInfo] = {
     import spark.implicits._
+    dataInfoCached = true
+    spark.sparkContext.parallelize(DataOperation.getTableDataInfo(partition_info_arr)).toDS()
+  }.persist()
+
+  lazy val allPartitionFilterInfoDF: DataFrame = {
+    import spark.implicits._
+    partitionFilterInfoCached = true
+    val allPartitionFilterInfo: Seq[PartitionFilterInfo] = {
+      partition_info_arr
+        .map(part =>
+          PartitionFilterInfo(
+            part.range_id,
+            part.range_value,
+            MetaUtils.getPartitionMapFromKey(part.range_value)))
+    }
     spark.sparkContext.parallelize(allPartitionFilterInfo).toDF()
-  }
+  }.persist()
 
-  lazy val sizeInBytes: Long = allDataInfo.map(_.size).sum
+  lazy val sizeInBytes: Long = allDataInfoDS.agg(sum("size")).first().getLong(0)
 
   /** Return the underlying Spark `FileFormat` of the StarTable. */
   def fileFormat: FileFormat = new ParquetFileFormat()
@@ -64,5 +72,14 @@ class Snapshot(table_info: TableInfo,
   def isFirstCommit: Boolean = is_first_commit
 
   def getPartitionInfoArray: Array[PartitionInfo] = partition_info_arr
+
+  def uncache(): Unit ={
+    if(dataInfoCached){
+      allDataInfoDS.unpersist()
+    }
+    if(partitionFilterInfoCached){
+      allPartitionFilterInfoDF.unpersist()
+    }
+  }
 
 }

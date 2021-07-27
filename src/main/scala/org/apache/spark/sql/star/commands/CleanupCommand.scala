@@ -23,11 +23,13 @@ import com.engineplus.star.meta.{DataOperation, MetaCommit}
 import org.apache.hadoop.fs.{FileSystem, Path}
 import org.apache.spark.broadcast.Broadcast
 import org.apache.spark.internal.Logging
+import org.apache.spark.sql.expressions.UserDefinedFunction
 import org.apache.spark.sql.star.sources.StarLakeSQLConf
 import org.apache.spark.sql.star.utils.FileOperation
 import org.apache.spark.sql.star.{SnapshotManagement, StarLakeUtils}
 import org.apache.spark.sql.{DataFrame, Dataset, SparkSession}
 import org.apache.spark.util.{Clock, SerializableConfiguration, SystemClock}
+import org.apache.spark.sql.functions._
 
 import scala.collection.JavaConverters._
 
@@ -78,12 +80,9 @@ object CleanupCommand extends CleanupCommandImpl with Serializable{
 
     val snapshot = snapshotManagement.snapshot
     val vPath = new Path(basePath)
-    val vFs = vPath.getFileSystem(hadoopConf.value.value)
-    val validFiles = spark.sparkContext.parallelize(
-      snapshot.allDataInfo
-        .map(_.file_path)
-        .map(transDataFilePathToRelative(_, vPath, vFs)))
-      .toDF("path")
+    val validFiles = snapshot.allDataInfoDS
+      .withColumn("path", transDataFilePathToRelativeUDF(vPath, hadoopConf.value)(col("file_path")))
+      .select("path")
 
     val partitionColumns = snapshot.getTableInfo.range_partition_columns
 
@@ -178,6 +177,13 @@ trait CleanupCommandImpl extends Logging {
     val filePath = new Path(file)
     pathToString(FileOperation.tryRelativizePath(fs, basePath, filePath))
   }
+
+  protected def transDataFilePathToRelativeUDF(basePath: Path,
+                                               hadoopConf: SerializableConfiguration): UserDefinedFunction =
+    udf((file: String) => {
+      val fs = basePath.getFileSystem(hadoopConf.value)
+      transDataFilePathToRelative(file, basePath, fs)
+    })
 
   /**
     * Attempts to relativize the `path` with respect to the `reservoirBase` and converts the path to
