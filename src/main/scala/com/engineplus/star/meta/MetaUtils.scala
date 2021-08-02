@@ -187,10 +187,12 @@ object MetaUtils extends Logging {
   /** get partition key Map from string */
   def getPartitionMapFromKey(range_value: String): Map[String, String] = {
     var partition_values = Map.empty[String, String]
-    val range_list = range_value.split(",")
-    for (range <- range_list) {
-      val parts = range.split("=")
-      partition_values = partition_values ++ Map(parts(0) -> parts(1))
+    if (!range_value.equals(DEFAULT_RANGE_PARTITION_VALUE)){
+      val range_list = range_value.split(",")
+      for (range <- range_list) {
+        val parts = range.split("=")
+        partition_values = partition_values ++ Map(parts(0) -> parts(1))
+      }
     }
     partition_values
   }

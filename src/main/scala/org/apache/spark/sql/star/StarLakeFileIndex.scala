@@ -94,7 +94,7 @@ case class DataFileIndex(spark: SparkSession,
     PartitionFilter.filesForScan(snapshotManagement.snapshot, partitionFilters).map(f => absolutePath(f.file_path).toString)
   }
 
-  override def sizeInBytes: Long = snapshotManagement.snapshot.sizeInBytes
+  override def sizeInBytes: Long = snapshotManagement.snapshot.sizeInBytes(partitionFilters)
 }
 
 
@@ -315,7 +315,7 @@ case class DataFileIndexV2(override val spark: SparkSession,
       .map(f => absolutePath(f.file_path, tableName).toString)
   }
 
-  override def sizeInBytes: Long = snapshotManagement.snapshot.sizeInBytes
+  override def sizeInBytes: Long = snapshotManagement.snapshot.sizeInBytes(partitionFilters)
 }
 
 
