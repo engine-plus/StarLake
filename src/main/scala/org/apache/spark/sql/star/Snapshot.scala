@@ -20,7 +20,6 @@ import com.engineplus.star.meta.{DataOperation, MetaUtils}
 import org.apache.spark.sql.catalyst.expressions.Expression
 import org.apache.spark.sql.execution.datasources.FileFormat
 import org.apache.spark.sql.execution.datasources.parquet.ParquetFileFormat
-import org.apache.spark.sql.functions.sum
 import org.apache.spark.sql.star.utils.{DataFileInfo, PartitionFilterInfo, PartitionInfo, TableInfo}
 import org.apache.spark.sql.{DataFrame, Dataset, SparkSession}
 
@@ -63,7 +62,6 @@ class Snapshot(table_info: TableInfo,
     spark.sparkContext.parallelize(allPartitionFilterInfo).toDF()
   }.persist()
 
-  //lazy val sizeInBytes: Long = allDataInfoDS.agg(sum("size")).first().getLong(0)
   def sizeInBytes(filters: Seq[Expression] = Nil): Long = {
     PartitionFilter.filesForScan(this, filters).map(_.size).sum
   }
@@ -78,11 +76,11 @@ class Snapshot(table_info: TableInfo,
 
   def getPartitionInfoArray: Array[PartitionInfo] = partition_info_arr
 
-  def uncache(): Unit ={
-    if(dataInfoCached){
+  def uncache(): Unit = {
+    if (dataInfoCached) {
       allDataInfoDS.unpersist()
     }
-    if(partitionFilterInfoCached){
+    if (partitionFilterInfoCached) {
       allPartitionFilterInfoDF.unpersist()
     }
   }

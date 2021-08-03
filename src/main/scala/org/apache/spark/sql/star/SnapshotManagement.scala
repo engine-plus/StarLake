@@ -28,7 +28,6 @@ import org.apache.spark.sql.catalyst.TableIdentifier
 import org.apache.spark.sql.catalyst.expressions.Expression
 import org.apache.spark.sql.catalyst.plans.logical.AnalysisHelper
 import org.apache.spark.sql.execution.datasources.v2.DataSourceV2Relation
-import org.apache.spark.sql.execution.datasources.{HadoopFsRelation, LogicalRelation}
 import org.apache.spark.sql.functions._
 import org.apache.spark.sql.sources.BaseRelation
 import org.apache.spark.sql.star.catalog.StarLakeTableV2
@@ -169,7 +168,9 @@ class SnapshotManagement(path: String) extends Logging {
   }
 
 
-  def createDataFrame(files: Seq[DataFileInfo], requiredColumns: Seq[String], predicts: Option[Expression] = None): DataFrame = {
+  def createDataFrame(files: Seq[DataFileInfo],
+                      requiredColumns: Seq[String],
+                      predicts: Option[Expression] = None): DataFrame = {
     val skipFiles = if (predicts.isDefined) {
       val predictFiles = PartitionFilter.filesForScan(snapshot, Seq(predicts.get))
       files.intersect(predictFiles)
@@ -177,42 +178,25 @@ class SnapshotManagement(path: String) extends Logging {
       files
     }
 
-    if (snapshot.getTableInfo.hash_partition_columns.isEmpty) {
-      val fileIndex = new BatchDataFileIndex(spark, this, files)
-
-      val table_info = snapshot.getTableInfo
-
-      val relation = HadoopFsRelation(
-        fileIndex,
-        partitionSchema = snapshot.getTableInfo.range_partition_schema,
-        dataSchema = table_info.schema,
-        bucketSpec = None,
-        snapshot.fileFormat,
-        snapshot.getTableInfo.format.options)(spark)
-
-      Dataset.ofRows(spark, LogicalRelation(relation, isStreaming = false))
-    } else {
-      val fileIndex = BatchDataFileIndexV2(spark, this, skipFiles)
-      val table = StarLakeTableV2(
-        spark,
-        new Path(table_name),
+    val fileIndex = BatchDataFileIndexV2(spark, this, skipFiles)
+    val table = StarLakeTableV2(
+      spark,
+      new Path(table_name),
+      None,
+      None,
+      Option(fileIndex)
+    )
+    val option = new CaseInsensitiveStringMap(Map("basePath" -> table_name).asJava)
+    Dataset.ofRows(
+      spark,
+      DataSourceV2Relation(
+        table,
+        table.schema().toAttributes,
         None,
         None,
-        Option(fileIndex)
+        option
       )
-      val option = new CaseInsensitiveStringMap(Map("basePath" -> table_name).asJava)
-
-      Dataset.ofRows(
-        spark,
-        DataSourceV2Relation(
-          table,
-          table.schema().toAttributes,
-          None,
-          None,
-          option
-        )
-      ).select(requiredColumns.map(col): _*)
-    }
+    ).select(requiredColumns.map(col): _*)
   }
 
   def lockInterruptibly[T](body: => T): T = {
