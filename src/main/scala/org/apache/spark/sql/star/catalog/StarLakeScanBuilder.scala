@@ -100,7 +100,8 @@ case class StarLakeScanBuilder(sparkSession: SparkSession,
     val fileInfo = fileIndex.getFileInfo(Seq(parseFilter())).groupBy(_.range_partitions)
     val onlyOnePartition = fileInfo.size <= 1
     val hasNoDeltaFile = fileInfo.forall(f => f._2.forall(_.is_base_file))
-    val canUseAsyncReader = tableInfo.table_name.startsWith("s3") || tableInfo.table_name.startsWith("oss")
+    val validFormat = tableInfo.table_name.startsWith("s3") || tableInfo.table_name.startsWith("oss")
+    val canUseAsyncReader = validFormat && sparkSession.sessionState.conf.getConf(StarLakeSQLConf.ASYNC_READER_ENABLE)
 
 
     if (tableInfo.hash_partition_columns.isEmpty) {

@@ -119,7 +119,7 @@ object StarLakeOptions {
   val HASH_PARTITIONS = "hashPartitions"
   val HASH_BUCKET_NUM = "hashBucketNum"
 
-  /** 指定是否允许在某些场景下使用delta file */
+  /** whether it is allowed to use delta file */
   val AllowDeltaFile = "allowDeltaFile"
 
 }

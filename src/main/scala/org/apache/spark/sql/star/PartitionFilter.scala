@@ -16,6 +16,7 @@
 
 package org.apache.spark.sql.star
 
+import com.engineplus.star.meta.DataOperation
 import org.apache.spark.sql.catalyst.analysis.{Resolver, UnresolvedAttribute}
 import org.apache.spark.sql.catalyst.expressions.{And, Attribute, Cast, Expression, Literal}
 import org.apache.spark.sql.star.utils.{DataFileInfo, PartitionFilterInfo}
@@ -44,17 +45,10 @@ object PartitionFilter {
 
   def filesForScan(snapshot: Snapshot,
                    filters: Seq[Expression]): Array[DataFileInfo] = {
-    val table_info = snapshot.getTableInfo
-    val partitionFilters = filters.flatMap { filter =>
-      StarLakeUtils.splitMetadataAndDataPredicates(filter, table_info.range_partition_columns, snapshot.spark)._1
-    }
-    val allFiles = snapshot.allDataInfoDS.toDF()
+    val partitionIds = partitionsForScan(snapshot, filters).map(_.range_id)
+    val partitionInfo = snapshot.getPartitionInfoArray.filter(p => partitionIds.contains(p.range_id))
 
-    import snapshot.spark.implicits._
-    filterFileList(
-      table_info.range_partition_schema,
-      allFiles,
-      partitionFilters).as[DataFileInfo].collect()
+    DataOperation.getTableDataInfo(partitionInfo)
   }
 
   /**
