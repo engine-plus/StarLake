@@ -156,7 +156,7 @@ object StarLakeSQLConf {
     buildConf("meta.get.lock.max.attempts")
       .doc(
         """
-          |The maximum times for a commit attempts to acquire the partition write lock.
+          |The maximum times for a commit attempts to acquire the lock.
         """.stripMargin)
       .intConf
       .createWithDefault(5)

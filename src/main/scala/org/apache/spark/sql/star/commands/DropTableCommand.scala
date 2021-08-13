@@ -86,10 +86,15 @@ object DropTableCommand {
   private def dropTable(snapshot: Snapshot): Unit = {
     val table_id = snapshot.getTableInfo.table_id
     val table_name = snapshot.getTableInfo.table_name
+    val short_table_name = snapshot.getTableInfo.short_table_name
 
     MetaVersion.deleteTableInfo(table_name, table_id)
+    if(short_table_name.isDefined){
+      MetaVersion.deleteShortTableName(short_table_name.get)
+    }
 
     UndoLog.deleteUndoLogByTableId(UndoLogType.Commit.toString, table_id)
+    UndoLog.deleteUndoLogByTableId(UndoLogType.ShortTableName.toString, table_id)
     UndoLog.deleteUndoLogByTableId(UndoLogType.Partition.toString, table_id)
     UndoLog.deleteUndoLogByTableId(UndoLogType.Schema.toString, table_id)
     UndoLog.deleteUndoLogByTableId(UndoLogType.AddFile.toString, table_id)
@@ -185,9 +190,7 @@ object DropPartitionCommand extends PredicateHelper {
 
   private def dropPartition(table_name: String, table_id: String, range_value: String, range_id: String): Unit = {
     MetaVersion.deletePartitionInfoByRangeId(table_id, range_value, range_id)
-    UndoLog.deleteUndoLogByRangeId(UndoLogType.Commit.toString, table_id, range_id)
     UndoLog.deleteUndoLogByRangeId(UndoLogType.Partition.toString, table_id, range_id)
-    UndoLog.deleteUndoLogByRangeId(UndoLogType.Schema.toString, table_id, range_id)
     UndoLog.deleteUndoLogByRangeId(UndoLogType.AddFile.toString, table_id, range_id)
     UndoLog.deleteUndoLogByRangeId(UndoLogType.ExpireFile.toString, table_id, range_id)
 

@@ -41,6 +41,8 @@ trait TransactionalWrite {
 
   protected var commitType: Option[CommitType]
 
+  protected var shortTableName: Option[String]
+
   protected var hasWritten = false
 
   protected def getCommitter(outputPath: Path): DelayedCommitProtocol =
@@ -152,9 +154,9 @@ trait TransactionalWrite {
         Map.empty,
         output)
 
-      val physicalPlan = if(isCompaction){
+      val physicalPlan = if (isCompaction) {
         queryExecution.executedPlan
-      }else{
+      } else {
         InvariantCheckerExec(queryExecution.executedPlan, invariants)
       }
 

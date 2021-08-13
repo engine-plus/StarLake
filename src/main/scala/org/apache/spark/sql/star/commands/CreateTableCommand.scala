@@ -16,6 +16,7 @@
 
 package org.apache.spark.sql.star.commands
 
+import com.engineplus.star.meta.MetaVersion
 import org.apache.hadoop.fs.Path
 import org.apache.spark.internal.Logging
 import org.apache.spark.sql._
@@ -115,6 +116,13 @@ case class CreateTableCommand(table: CatalogTable,
 
     val tc = snapshotManagement.startTransaction()
 
+    val shortTableName = table.identifier.table
+    if (MetaVersion.isShortTableNameExists(shortTableName)._1){
+      throw StarLakeErrors.tableAlreadyExistsException(shortTableName)
+    }else{
+      tc.setShortTableName(shortTableName)
+    }
+
     var newMode: SaveMode = mode
 
     if (query.isDefined) {
@@ -154,9 +162,7 @@ case class CreateTableCommand(table: CatalogTable,
           assertPathEmpty(sparkSession, tableWithLocation)
         }
 
-        // This is either a new table, or, we never defined the schema of the table. While it is
-        // unexpected that `txn.metadata.schema` to be empty when txn.readVersion >= 0, we still
-        // guard against it, in case of checkpoint corruption bugs.
+        // This is either a new table, or, we never defined the schema of the table.
         val noExistingMetadata = tc.isFirstCommit || tc.tableInfo.schema.isEmpty
         if (noExistingMetadata) {
           assertTableSchemaDefined(tableLocation, tableWithLocation)
@@ -167,7 +173,9 @@ case class CreateTableCommand(table: CatalogTable,
 
           tc.commit(Seq.empty[DataFileInfo], Seq.empty[DataFileInfo], newTableInfo)
         } else {
+          //verify table info has no difference, and then commit to set the short name from catalog table
           verifyTableInfo(tc, tableWithLocation)
+          tc.commit(Seq.empty[DataFileInfo], Seq.empty[DataFileInfo])
         }
       }
       // We are defining a table using the Create or Replace Table statements.

@@ -95,6 +95,7 @@ case class UpsertCommand(@transient source: LogicalPlan,
   override val rangePartitions: String = tableInfo.range_column
   override val hashPartitions: String = tableInfo.hash_column
   override val hashBucketNum: Int = tableInfo.bucket_num
+  override val shortTableName: Option[String] = None
 
 
   override def run(spark: SparkSession): Seq[Row] = {

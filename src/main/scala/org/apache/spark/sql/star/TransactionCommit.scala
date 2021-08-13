@@ -112,9 +112,21 @@ trait Transaction extends TransactionalWrite with Logging {
   /** Whether this commit is delta commit */
   override protected var commitType: Option[CommitType] = None
 
+  /** Whether this table has a short table name */
+  override protected var shortTableName: Option[String] = None
+
   def setCommitType(value: String): Unit = {
     assert(commitType.isEmpty, "Cannot set commit type more than once in a transaction.")
     commitType = Some(CommitType(value))
+  }
+
+  def setShortTableName(value: String): Unit = {
+    assert(shortTableName.isEmpty, "Cannot set short table name more than once in a transaction.")
+    assert(tableInfo.short_table_name.isEmpty || tableInfo.short_table_name.get.equals(value),
+      s"Table `$table_name` already has a short name `${tableInfo.short_table_name.get}`, you can't change it to `$value`")
+    if (tableInfo.short_table_name.isEmpty) {
+      shortTableName = Some(value)
+    }
   }
 
   def isFirstCommit: Boolean = snapshot.isFirstCommit
@@ -153,7 +165,7 @@ trait Transaction extends TransactionalWrite with Logging {
   def tableInfo: TableInfo = newTableInfo.getOrElse(snapshotTableInfo)
 
   /** Set read files when compacting part of table files. */
-  def setReadFiles(files: Seq[DataFileInfo]): Unit ={
+  def setReadFiles(files: Seq[DataFileInfo]): Unit = {
     readFiles.clear()
     readFiles ++= files
   }
@@ -352,7 +364,7 @@ trait Transaction extends TransactionalWrite with Logging {
 
       try {
         val changeSchema = !isFirstCommit && newTableInfo.nonEmpty
-        MetaCommit.doMetaCommit(commit_info, changeSchema)
+        MetaCommit.doMetaCommit(commit_info, changeSchema, shortTableName)
       } catch {
         case e: MetaRerunException => throw e
         case e: Throwable => throw e

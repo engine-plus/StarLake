@@ -63,6 +63,8 @@ case class WriteIntoTable(snapshotManagement: SnapshotManagement,
 
   override protected val hashBucketNum: Int = options.hashBucketNum
 
+  override protected val shortTableName: Option[String] = options.shortTableName
+
   override def run(sparkSession: SparkSession): Seq[Row] = {
     snapshotManagement.withNewTransaction { tc =>
       val (addFiles, expireFiles) = write(tc, sparkSession)

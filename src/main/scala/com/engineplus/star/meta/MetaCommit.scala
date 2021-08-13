@@ -27,9 +27,12 @@ import org.apache.spark.sql.star.utils.{MetaInfo, PartitionInfo, commitStateInfo
 
 import scala.collection.mutable.ArrayBuffer
 
-object MetaCommit extends Logging{
+object MetaCommit extends Logging {
   //meta commit process
-  def doMetaCommit(meta_info: MetaInfo, changeSchema: Boolean, times: Int = 0): Unit = {
+  def doMetaCommit(meta_info: MetaInfo,
+                   changeSchema: Boolean,
+                   shortTableName: Option[String],
+                   times: Int = 0): Unit = {
     //add commit type undo log, generate commit_id
     val commit_id = generateCommitIdToAddUndoLog(
       meta_info.table_info.table_name,
@@ -38,6 +41,11 @@ object MetaCommit extends Logging{
       meta_info.batch_id)
 
     try {
+      //lock short table name if defined, it will quickly failed when another user committing the same name
+      if (shortTableName.isDefined) {
+        lockShortTableName(commit_id, shortTableName.get)
+      }
+
       //hold all needed partition lock
       var new_meta_info = takePartitionsWriteLock(meta_info, commit_id)
 
@@ -63,6 +71,24 @@ object MetaCommit extends Logging{
         updateSchema(new_meta_info)
       }
 
+      //set short name for this table
+      if (shortTableName.isDefined) {
+        //add short name relation
+        MetaVersion.addShortTableName(shortTableName.get, new_meta_info.table_info.table_name)
+        //add short name to table_info
+        MetaVersion.updateTableShortName(
+          new_meta_info.table_info.table_name,
+          new_meta_info.table_info.table_id,
+          shortTableName.get)
+
+        MetaLock.unlock(shortTableName.get, commit_id)
+        deleteUndoLog(
+          commit_type = UndoLogType.ShortTableName.toString,
+          table_id = new_meta_info.table_info.table_id,
+          commit_id = commit_id
+        )
+      }
+
       //add/update files info to table data_info, release partition lock and delete undo log
       commitMetaInfo(new_meta_info, changeSchema)
 
@@ -70,9 +96,9 @@ object MetaCommit extends Logging{
       case e: MetaRetryException =>
         e.printStackTrace()
         logInfo("!!!!!!! Error Retry commit id: " + commit_id)
-        rollBackUpdate(meta_info, commit_id, changeSchema)
+        rollBackUpdate(meta_info, commit_id, changeSchema, shortTableName)
         if (times < MetaUtils.MAX_COMMIT_ATTEMPTS) {
-          doMetaCommit(meta_info, changeSchema, times + 1)
+          doMetaCommit(meta_info, changeSchema, shortTableName, times + 1)
         } else {
           throw StarLakeErrors.commitFailedReachLimit(
             meta_info.table_info.table_name,
@@ -81,7 +107,7 @@ object MetaCommit extends Logging{
         }
 
       case e: Throwable =>
-        rollBackUpdate(meta_info, commit_id, changeSchema)
+        rollBackUpdate(meta_info, commit_id, changeSchema, shortTableName)
         throw e
     }
 
@@ -297,6 +323,17 @@ object MetaCommit extends Logging{
 
   }
 
+  def lockShortTableName(commit_id: String, shortTableName: String): Unit = {
+    val (lock_flag, last_commit_id) = MetaLock.lock(shortTableName, commit_id)
+    if (!lock_flag) {
+      throw StarLakeErrors.failedLockShortTableName(shortTableName)
+    }
+    val table_exists = MetaVersion.isShortTableNameExists(shortTableName)._1
+    if (table_exists) {
+      throw StarLakeErrors.failedLockShortTableName(shortTableName)
+    }
+  }
+
 
   def lockSchema(meta_info: MetaInfo): Unit = {
     val (lock_flag, last_commit_id) = MetaLock.lock(meta_info.table_info.table_id, meta_info.commit_id)
@@ -399,13 +436,12 @@ object MetaCommit extends Logging{
     MetaVersion.updateTableSchema(
       table_name,
       table_id,
-      commit_id,
       schema_index,
       meta_info.table_info.configuration,
       new_read_version)
 
     MetaLock.unlock(table_id, commit_id)
-    deleteUndoLogByCommitId(UndoLogType.Schema.toString, table_id, commit_id)
+    deleteUndoLog(UndoLogType.Schema.toString, table_id, commit_id)
   }
 
 
@@ -428,6 +464,14 @@ object MetaCommit extends Logging{
           write_version,
           commit_id,
           file.modification_time)
+
+        deleteUndoLog(
+          commit_type = UndoLogType.ExpireFile.toString,
+          table_id = table_id,
+          commit_id = commit_id,
+          range_id = range_id,
+          file_path = file.file_path
+        )
       }
       for (file <- partition_info.add_files) {
         DataOperation.addNewDataFile(
@@ -440,30 +484,44 @@ object MetaCommit extends Logging{
           file.modification_time,
           file.file_exist_cols,
           file.is_base_file)
+
+        deleteUndoLog(
+          commit_type = UndoLogType.AddFile.toString,
+          table_id = table_id,
+          commit_id = commit_id,
+          range_id = range_id,
+          file_path = file.file_path
+        )
       }
 
-      MetaVersion.updatePartitionReadVersion(
-        table_id,
-        range_id,
-        table_name,
-        range_value,
-        write_version,
-        commit_id,
-        partition_info.delta_file_num,
-        partition_info.be_compacted)
+      MetaVersion.updatePartitionInfo(
+        table_id = table_id,
+        range_value = range_value,
+        range_id = range_id,
+        write_version = write_version,
+        delta_file_num = partition_info.delta_file_num,
+        be_compacted = partition_info.be_compacted)
 
       MetaLock.unlock(partition_info.range_id, commit_id)
+      deleteUndoLog(
+        commit_type = UndoLogType.Partition.toString,
+        table_id = table_id,
+        commit_id = commit_id,
+        range_id = range_id
+      )
     }
-    deleteUndoLogByCommitId(UndoLogType.AddFile.toString, table_id, commit_id)
-    deleteUndoLogByCommitId(UndoLogType.ExpireFile.toString, table_id, commit_id)
-    deleteUndoLogByCommitId(UndoLogType.Partition.toString, table_id, commit_id)
 
     //if it is streaming job, streaming info should be updated
-    if(meta_info.query_id.nonEmpty && meta_info.batch_id >= 0){
+    if (meta_info.query_id.nonEmpty && meta_info.batch_id >= 0) {
       StreamingRecord.updateStreamingInfo(table_id, meta_info.query_id, meta_info.batch_id, System.currentTimeMillis())
     }
 
-    deleteUndoLogByCommitId(UndoLogType.Commit.toString, table_id, commit_id)
+    deleteUndoLog(
+      commit_type = UndoLogType.Commit.toString,
+      table_id = table_id,
+      commit_id = commit_id
+    )
+
     logInfo(s"{{{{{{commit: $commit_id success!!!}}}}}}")
   }
 
@@ -497,7 +555,7 @@ object MetaCommit extends Logging{
     val update_file_info_arr = meta_info.partitionInfoArray
     meta_info.commit_type match {
       case DeltaCommit => //files conflict checking is not required when committing delta files
-      case CompactionCommit | PartCompactionCommit=>
+      case CompactionCommit | PartCompactionCommit =>
         //when committing compaction job, it just need to check that the read files have not been deleted
         DataOperation.checkDataInfo(meta_info.commit_id, update_file_info_arr, false, true)
       case _ =>
@@ -532,7 +590,8 @@ object MetaCommit extends Logging{
     checkAndRedoCommit(table_id)
     val limit_timestamp = System.currentTimeMillis() - MetaUtils.UNDO_LOG_TIMEOUT
 
-    val log_info_seq = UndoLogType.getAllType
+    val allType = UndoLogType.getAllType
+    val log_info_seq = allType
       .map(UndoLog.getTimeoutUndoLogInfo(_, table_id, limit_timestamp))
       .flatMap(_.toSeq)
 
@@ -542,7 +601,7 @@ object MetaCommit extends Logging{
     //delete undo log directly if table is not exists
     commit_log_info_seq
       .filter(log => !MetaVersion.isTableIdExists(log.table_name, log.table_id))
-      .foreach(log => deleteUndoLogByCommitId(UndoLogType.Commit.toString, table_id, log.commit_id))
+      .foreach(log => deleteUndoLog(UndoLogType.Commit.toString, table_id, log.commit_id))
 
     //if a commit_id don't has corresponding undo log with commit type, it should be clean
     val skip_commit_id =
@@ -556,16 +615,12 @@ object MetaCommit extends Logging{
         log.commit_type match {
           case t: String if t.equalsIgnoreCase(UndoLogType.Schema.toString) =>
             MetaLock.unlock(log.table_id, log.commit_id)
-            deleteUndoLogByCommitId(UndoLogType.Schema.toString, table_id, log.commit_id)
           case t: String if t.equalsIgnoreCase(UndoLogType.Partition.toString) =>
             MetaLock.unlock(log.range_id, log.commit_id)
-            deleteUndoLogByCommitId(UndoLogType.Partition.toString, table_id, log.commit_id)
-          case t: String if t.equalsIgnoreCase(UndoLogType.AddFile.toString) =>
-            deleteUndoLogByCommitId(UndoLogType.AddFile.toString, table_id, log.commit_id)
-          case t: String if t.equalsIgnoreCase(UndoLogType.ExpireFile.toString) =>
-            deleteUndoLogByCommitId(UndoLogType.ExpireFile.toString, table_id, log.commit_id)
-          case _ => StarLakeErrors.unknownUndoLogTypeException(_)
+          case t: String if t.equalsIgnoreCase(UndoLogType.ShortTableName.toString) =>
+            MetaLock.unlock(log.short_table_name, log.commit_id)
         }
+        deleteUndoLog(log.commit_type, table_id, log.commit_id, log.range_id, log.file_path)
       })
 
     //cleanup the timeout streaming info

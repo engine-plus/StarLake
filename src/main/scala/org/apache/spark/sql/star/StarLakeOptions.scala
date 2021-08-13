@@ -91,6 +91,15 @@ trait StarLakeWriteOptionsImpl extends StarLakeOptionParser {
       .getOrElse(sqlConf.getConf(StarLakeSQLConf.USE_DELTA_FILE))
   }
 
+  def shortTableName: Option[String] = {
+    val shortTableName = options.get(SHORT_TABLE_NAME).getOrElse("")
+    if (shortTableName.isEmpty) {
+      None
+    } else {
+      Some(shortTableName)
+    }
+  }
+
 
 }
 
@@ -118,6 +127,8 @@ object StarLakeOptions {
   val RANGE_PARTITIONS = "rangePartitions"
   val HASH_PARTITIONS = "hashPartitions"
   val HASH_BUCKET_NUM = "hashBucketNum"
+
+  val SHORT_TABLE_NAME = "shortTableName"
 
   /** whether it is allowed to use delta file */
   val AllowDeltaFile = "allowDeltaFile"

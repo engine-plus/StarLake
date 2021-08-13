@@ -87,6 +87,19 @@ object UndoLog extends Logging {
       setting = setting)
   }
 
+  def addShortTableNameUndoLog(table_name: String,
+                               table_id: String,
+                               commit_id: String,
+                               write_version: Long,
+                               short_table_name: String): Unit = {
+    insertUndoLog(
+      commit_type = UndoLogType.ShortTableName.toString,
+      table_id = table_id,
+      commit_id = commit_id,
+      table_name = table_name,
+      short_table_name = short_table_name)
+  }
+
   def addFileUndoLog(table_name: String,
                      table_id: String,
                      range_id: String,
@@ -166,15 +179,17 @@ object UndoLog extends Logging {
                            table_schema: String = default_value,
                            setting: String = default_setting,
                            query_id: String = default_value, //for streaming commit
-                           batch_id: Long = default_value.toLong): Boolean = {
+                           batch_id: Long = default_value.toLong,
+                           short_table_name: String = default_value): Boolean = {
     cassandraConnector.withSessionDo(session => {
       val res = session.execute(
         s"""
            |insert into $database.undo_log
            |(commit_type,table_id,commit_id,range_id,file_path,table_name,range_value,tag,write_version,timestamp,
-           |size,modification_time,table_schema,setting,query_id,batch_id)
+           |size,modification_time,table_schema,setting,query_id,batch_id,short_table_name)
            |values ('$commit_type','$table_id','$commit_id','$range_id','$file_path','$table_name','$range_value',$tag,
-           |$write_version,$timestamp,$size,$modification_time,'$table_schema',$setting,'$query_id',$batch_id)
+           |$write_version,$timestamp,$size,$modification_time,'$table_schema',$setting,'$query_id',$batch_id,
+           |'$short_table_name')
            |if not exists
       """.stripMargin)
       res.wasApplied()
@@ -198,16 +213,18 @@ object UndoLog extends Logging {
                     file_exist_cols: String = default_value,
                     delta_file_num: Int = default_value.toInt,
                     be_compacted: Boolean = true,
-                    is_base_file: Boolean = false): Unit = {
+                    is_base_file: Boolean = false,
+                    short_table_name: String = default_value): Unit = {
     cassandraConnector.withSessionDo(session => {
       session.execute(
         s"""
            |insert into $database.undo_log
            |(commit_type,table_id,commit_id,range_id,file_path,table_name,range_value,tag,write_version,timestamp,
-           |size,modification_time,table_schema,setting,file_exist_cols,delta_file_num,be_compacted,is_base_file)
+           |size,modification_time,table_schema,setting,file_exist_cols,delta_file_num,be_compacted,is_base_file,
+           |short_table_name)
            |values ('$commit_type','$table_id','$commit_id','$range_id','$file_path','$table_name','$range_value',$tag,
            |$write_version,$timestamp,$size,$modification_time,'$table_schema',$setting,'$file_exist_cols',
-           |$delta_file_num,$be_compacted,$is_base_file)
+           |$delta_file_num,$be_compacted,$is_base_file,'$short_table_name')
       """.stripMargin)
     })
 
@@ -358,7 +375,8 @@ object UndoLog extends Logging {
       val res = session.executeAsync(
         s"""
            |select table_name,range_id,range_value,file_path,tag,write_version,timestamp,size,modification_time,
-           |table_schema,setting,file_exist_cols,delta_file_num,be_compacted,is_base_file,query_id,batch_id
+           |table_schema,setting,file_exist_cols,delta_file_num,be_compacted,is_base_file,query_id,batch_id,
+           |short_table_name
            |from $database.undo_log where commit_type='$commit_type' and table_id='$table_id'
            |and commit_id='$commit_id'
       """.stripMargin).getUninterruptibly()
@@ -387,7 +405,8 @@ object UndoLog extends Logging {
           re.getBool("be_compacted"),
           re.getBool("is_base_file"),
           re.getString("query_id"),
-          re.getLong("batch_id"))
+          re.getLong("batch_id"),
+          re.getString("short_table_name"))
       }
       arr_buf.toArray
     })
@@ -411,8 +430,9 @@ object UndoLog extends Logging {
     cassandraConnector.withSessionDo(session => {
       val res = session.executeAsync(
         s"""
-           |select commit_id,range_id,file_path,table_name,range_value,tag,write_version,timestamp,size,modification_time,
-           |table_schema,setting,file_exist_cols,delta_file_num,be_compacted,is_base_file,query_id,batch_id
+           |select commit_id,range_id,file_path,table_name,range_value,tag,write_version,timestamp,size,
+           |modification_time,table_schema,setting,file_exist_cols,delta_file_num,be_compacted,
+           |is_base_file,query_id,batch_id,short_table_name
            |from $database.undo_log where commit_type='$commit_type' and table_id='$table_id'
            |and timestamp<$limit_timestamp allow filtering
       """.stripMargin).getUninterruptibly()
@@ -441,7 +461,8 @@ object UndoLog extends Logging {
           re.getBool("be_compacted"),
           re.getBool("is_base_file"),
           re.getString("query_id"),
-          re.getLong("batch_id"))
+          re.getLong("batch_id"),
+          re.getString("short_table_name"))
       }
       arr_buf.toArray
     })
@@ -507,4 +528,20 @@ object UndoLog extends Logging {
       """.stripMargin)
     })
   }
+
+  def deleteUndoLog(commit_type: String,
+                    table_id: String,
+                    commit_id: String,
+                    range_id: String = default_value,
+                    file_path: String = default_value): Unit = {
+    cassandraConnector.withSessionDo(session => {
+      session.execute(
+        s"""
+           |delete from $database.undo_log where commit_type='$commit_type' and
+           |table_id='$table_id' and commit_id='$commit_id' and range_id='$range_id' and file_path='$file_path'
+      """.stripMargin)
+    })
+  }
+
+
 }

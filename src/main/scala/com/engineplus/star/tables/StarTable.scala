@@ -16,10 +16,10 @@
 
 package com.engineplus.star.tables
 
-import java.io.File
 import java.net.URI
 
 import com.engineplus.star.livy.{CompactionJob, CompactionJobWithCondition, ExecuteWithLivy}
+import com.engineplus.star.meta.MetaVersion
 import com.engineplus.star.tables.execution.StarTableOperations
 import org.apache.hadoop.fs.Path
 import org.apache.spark.annotation._
@@ -29,7 +29,7 @@ import org.apache.spark.sql.catalyst.expressions.{Expression, Literal}
 import org.apache.spark.sql.execution.datasources.v2.merge.parquet.batch.merge_operator.MergeOperator
 import org.apache.spark.sql.star.exception.StarLakeErrors
 import org.apache.spark.sql.star.sources.StarLakeSourceUtils
-import org.apache.spark.sql.star.{SnapshotManagement, StarLakeTableIdentifier, StarLakeUtils}
+import org.apache.spark.sql.star.{SnapshotManagement, StarLakeOptions, StarLakeUtils}
 
 import scala.collection.JavaConverters._
 
@@ -386,10 +386,10 @@ class StarTable(df: => Dataset[Row], snapshotManagement: SnapshotManagement)
         livyClient.addJar(new URI(path)).get()
       })
     }
-//    livyClient.uploadJar(new File(ExecuteWithLivy.getSourcePath(this))).get()
-    if (condition.equalsIgnoreCase("")){
+    //    livyClient.uploadJar(new File(ExecuteWithLivy.getSourcePath(this))).get()
+    if (condition.equalsIgnoreCase("")) {
       livyClient.submit(new CompactionJob(snapshotManagement.table_name, force))
-    }else{
+    } else {
       livyClient.submit(new CompactionJobWithCondition(snapshotManagement.table_name, condition, force))
     }
   }
@@ -410,8 +410,9 @@ class StarTable(df: => Dataset[Row], snapshotManagement: SnapshotManagement)
     executeCleanup(snapshotManagement, justList)
   }
 
-  def dropTable(): Unit = {
+  def dropTable(): Boolean = {
     executeDropTable(snapshotManagement)
+    true
   }
 
   def dropPartition(condition: String): Unit = {
@@ -419,6 +420,8 @@ class StarTable(df: => Dataset[Row], snapshotManagement: SnapshotManagement)
   }
 
   def dropPartition(condition: Expression): Unit = {
+    assert(snapshotManagement.snapshot.getTableInfo.range_partition_columns.nonEmpty,
+      s"Table `${snapshotManagement.table_name}` is not a range partitioned table, dropTable command can't use on it.")
     executeDropPartition(snapshotManagement, condition)
   }
 
@@ -426,8 +429,6 @@ class StarTable(df: => Dataset[Row], snapshotManagement: SnapshotManagement)
 }
 
 object StarTable {
-
-
   /**
     * Create a StarTable for the data at the given `path`.
     *
@@ -461,7 +462,7 @@ object StarTable {
   }
 
   /**
-    * Create a StarTable using the given table or view name using the given SparkSession.
+    * Create a StarTable using the given table name using the given SparkSession.
     *
     * Note: This uses the active SparkSession in the current thread to read the table data. Hence,
     * this throws error if active SparkSession has not been set, that is,
@@ -478,11 +479,13 @@ object StarTable {
     * Create a StarTable using the given table or view name using the given SparkSession.
     */
   def forName(sparkSession: SparkSession, tableName: String): StarTable = {
-    val tableIdent = sparkSession.sessionState.sqlParser.parseTableIdentifier(tableName)
-    if (StarLakeUtils.isStarLakeTable(sparkSession, tableIdent)) {
-      new StarTable(sparkSession.table(tableName), SnapshotManagement.forTable(sparkSession, tableIdent))
+    val (exists, tablePath) = MetaVersion.isShortTableNameExists(tableName)
+    if (exists) {
+      val starName = if (tableName.startsWith("star.")) tableName else s"star.$tableName"
+      new StarTable(sparkSession.table(starName),
+        SnapshotManagement(tablePath))
     } else {
-      throw StarLakeErrors.notAStarLakeTableException(StarLakeTableIdentifier(table = Some(tableIdent)))
+      throw StarLakeErrors.notAStarLakeTableException(tableName)
     }
   }
 
@@ -490,13 +493,34 @@ object StarTable {
     StarLakeUtils.isStarLakeTable(tablePath)
   }
 
-
-  def registerMergeOperator(spark: SparkSession, className: String, funName: String): Unit ={
+  def registerMergeOperator(spark: SparkSession, className: String, funName: String): Unit = {
     StarLakeUtils.getClass(className).getConstructors()(0)
       .newInstance()
       .asInstanceOf[MergeOperator[Any]]
       .register(spark, funName)
   }
 
+  def createMaterialView(viewName: String,
+                         viewPath: String,
+                         sqlText: String,
+                         rangePartitions: Seq[String] = Nil,
+                         hashPartitions: Seq[String] = Nil,
+                         hashBucketNum: Int = -1): Unit = {
+    val dfWriter = SparkSession.active.sql(sqlText)
+      .write
+      .format(StarLakeSourceUtils.NAME)
+      .mode("overwrite")
+
+    if (rangePartitions.nonEmpty) {
+      dfWriter.option(StarLakeOptions.RANGE_PARTITIONS, rangePartitions.mkString(","))
+    }
+    if (hashPartitions.nonEmpty) {
+      dfWriter.option(StarLakeOptions.HASH_PARTITIONS, hashPartitions.mkString(","))
+      dfWriter.option(StarLakeOptions.HASH_BUCKET_NUM, hashBucketNum)
+    }
+
+    dfWriter.option("isStarLakeMaterialView", "true")
+    dfWriter.save(viewPath)
+  }
 
 }

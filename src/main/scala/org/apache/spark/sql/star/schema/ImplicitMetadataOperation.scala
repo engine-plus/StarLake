@@ -33,6 +33,7 @@ trait ImplicitMetadataOperation extends Logging {
   protected val rangePartitions: String
   protected val hashPartitions: String
   protected val hashBucketNum: Int
+  protected val shortTableName: Option[String]
 
   private def transPartitionColums(partitionColumns: String): Seq[String] = {
     if (partitionColumns.equalsIgnoreCase("")) {
@@ -97,6 +98,9 @@ trait ImplicitMetadataOperation extends Logging {
         (transPartitionColums(table_info.range_column), transPartitionColums(table_info.hash_column), table_info.bucket_num)
       }
 
+    if (shortTableName.isDefined){
+      tc.setShortTableName(shortTableName.get)
+    }
 
     val normalizedRangePartitionCols =
       normalizePartitionColumns(spark, realRangeColumns, schema)

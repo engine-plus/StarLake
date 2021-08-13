@@ -45,6 +45,10 @@ object StarLakeSourceUtils {
     MetaVersion.isTableExists(table_name)
   }
 
+  def isStarLakeShortTableNameExists(shortName: String): Boolean = {
+    MetaVersion.isShortTableNameExists(shortName)._1
+  }
+
   /** Check whether this table is a star table based on information from the Catalog. */
   def isStarLakeTable(provider: Option[String]): Boolean = {
     provider.exists(isStarLakeDataSourceName)

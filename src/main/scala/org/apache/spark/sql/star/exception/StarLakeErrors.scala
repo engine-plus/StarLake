@@ -73,6 +73,14 @@ object StarLakeErrors {
        """.stripMargin.split("\n").mkString(" ").trim)
   }
 
+  def failedAddShortTableNameException(short_table_name: String): MetaException = {
+    new MetaException(
+      s"""
+         |Error: Failed to add short table name for table: $short_table_name,
+         |this table may already exists.
+       """.stripMargin.split("\n").mkString(" ").trim)
+  }
+
   def failedAddFragmentValueException(id: String): MetaException = {
     new MetaException(
       s"""
@@ -246,6 +254,10 @@ object StarLakeErrors {
 
   def notAStarLakeTableException(starTableIdentifier: StarLakeTableIdentifier): Throwable = {
     new AnalysisException(s"$starTableIdentifier is not an Star table.")
+  }
+
+  def notAStarLakeTableException(starTableName: String): Throwable = {
+    new AnalysisException(s"$starTableName is not an Star table.")
   }
 
   def notAnStarLakeSourceException(command: String, plan: Option[LogicalPlan] = None): Throwable = {
@@ -494,11 +506,6 @@ object StarLakeErrors {
 
   }
 
-  def unknownUndoLogTypeException(logType: String): Throwable = {
-    throw new AnalysisException(
-      s"Unknown undo log type `$logType` has been found.")
-  }
-
   def tableNotFoundException(table_name: String, table_id: String): Throwable = {
     throw new AnalysisException(
       s"Table `$table_name` with id=`$table_id` was not found.")
@@ -594,7 +601,20 @@ object StarLakeErrors {
     new MetaException("Compaction with part merging commit failed, another job may had compacted this partition.")
   }
 
+  def failedLockShortTableName(table: String): Throwable = {
+    new MetaException(
+      s"""Table `$table` is creating by another user.""")
+  }
 
+  def shortTableNameExistsException(table: String): Throwable = {
+    new MetaException(
+      s"""Table `$table` already exists.""")
+  }
+
+  def tableAlreadyExistsException(shortTableName: String): Throwable = {
+    new AnalysisException(
+      s"Table `$shortTableName` already exists.")
+  }
 
 
 

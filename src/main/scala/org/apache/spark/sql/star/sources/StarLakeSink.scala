@@ -43,6 +43,7 @@ class StarLakeSink(sqlContext: SQLContext,
   override val rangePartitions: String = options.rangePartitions
   override val hashPartitions: String = options.hashPartitions
   override val hashBucketNum: Int = options.hashBucketNum
+  override val shortTableName: Option[String] = options.shortTableName
 
 
   override def addBatch(batchId: Long, data: DataFrame): Unit =

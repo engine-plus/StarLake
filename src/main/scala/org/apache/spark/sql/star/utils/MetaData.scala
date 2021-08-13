@@ -39,7 +39,7 @@ case class PartitionInfo(table_id: String,
                          add_files: Array[DataFileInfo] = Array.empty[DataFileInfo],
                          expire_files: Array[DataFileInfo] = Array.empty[DataFileInfo],
                          last_update_timestamp: Long = -1L,
-                         delta_file_num: Int = 0,//approximate value of delta files
+                         delta_file_num: Int = 0, //approximate value of delta files
                          be_compacted: Boolean = false) {
   override def toString: String = {
     s"partition info: {\ntable_name: $table_name,\nrange_value: $range_value,\nread_version: $read_version," +
@@ -57,7 +57,8 @@ case class TableInfo(table_name: String,
                      hash_column: String = "",
                      bucket_num: Int = -1,
                      configuration: Map[String, String] = Map.empty,
-                     schema_version: Int = 1) {
+                     schema_version: Int = 1,
+                     short_table_name: Option[String] = None) {
 
   lazy val table_path: Path = new Path(table_name)
   lazy val range_partition_columns: Seq[String] = range_partition_schema.fieldNames
@@ -186,7 +187,8 @@ case class undoLogInfo(commit_type: String,
                        be_compacted: Boolean,
                        is_base_file: Boolean,
                        query_id: String,
-                       batch_id: Long)
+                       batch_id: Long,
+                       short_table_name: String)
 
 case class Format(provider: String = "parquet",
                   options: Map[String, String] = Map.empty)
