@@ -18,15 +18,16 @@ package com.engineplus.star.meta
 
 import java.util.concurrent.TimeUnit
 
+import com.engineplus.star.meta.MetaCommit.{unlockMaterialRelation, unlockMaterialViewName}
 import com.engineplus.star.meta.UndoLog._
 import org.apache.spark.internal.Logging
-import org.apache.spark.sql.star.utils.MetaInfo
+import org.apache.spark.sql.star.utils.{CommitOptions, MetaInfo, RelationTable}
 
 object RollBack extends Logging {
   def rollBackUpdate(meta_info: MetaInfo,
                      commit_id: String,
                      changeSchema: Boolean,
-                     shortTableName: Option[String]): Unit = {
+                     commitOptions: CommitOptions): Unit = {
     val table_id = meta_info.table_info.table_id
     val (last_timestamp, tag) = getCommitTimestampAndTag(
       UndoLogType.Commit.toString,
@@ -40,9 +41,28 @@ object RollBack extends Logging {
         MetaLock.unlock(table_id, commit_id)
         deleteUndoLog(UndoLogType.Schema.toString, table_id, commit_id)
       }
-      if (shortTableName.isDefined) {
-        MetaLock.unlock(shortTableName.get, commit_id)
+      if (commitOptions.shortTableName.isDefined) {
+        MetaVersion.deleteShortTableName(commitOptions.shortTableName.get, meta_info.table_info.table_name)
         deleteUndoLog(UndoLogType.ShortTableName.toString, table_id, commit_id)
+      }
+
+      if (commitOptions.materialInfo.isDefined) {
+        val shortTableName = if (commitOptions.shortTableName.isDefined) {
+          commitOptions.shortTableName.get
+        } else {
+          meta_info.table_info.short_table_name.get
+        }
+        //unlock material view
+        unlockMaterialViewName(commit_id, shortTableName)
+        //unlock material relation
+        commitOptions.materialInfo.get.relationTables.foreach(table => {
+          unlockMaterialRelation(commit_id = commit_id, table_id = table.tableId)
+        })
+        //delete undo log
+        deleteUndoLog(
+          commit_type = UndoLogType.Material.toString,
+          table_id = meta_info.table_info.table_id,
+          commit_id = commit_id)
       }
 
       for (partition_info <- partition_info_arr) {
@@ -77,6 +97,7 @@ object RollBack extends Logging {
     logInfo("roll back other commit~~~   ")
     if (markOtherCommitRollBack(table_id, commit_id, tag, timestamp)) {
       rollBackShortTableName(table_id, commit_id)
+      rollBackMaterialView(table_id, commit_id)
       rollBackSchemaLock(table_id, commit_id)
       rollBackAddedFile(table_id, commit_id)
       rollBackExpiredFile(table_id, commit_id)
@@ -92,6 +113,7 @@ object RollBack extends Logging {
     logInfo("clean roll back other commit~~~  ")
 
     rollBackShortTableName(table_id, commit_id)
+    rollBackMaterialView(table_id, commit_id)
     rollBackSchemaLock(table_id, commit_id)
     rollBackAddedFile(table_id, commit_id)
     rollBackExpiredFile(table_id, commit_id)
@@ -131,8 +153,30 @@ object RollBack extends Logging {
   private def rollBackShortTableName(table_id: String, commit_id: String): Unit = {
     val info = getUndoLogInfo(UndoLogType.ShortTableName.toString, table_id, commit_id)
     if (info.nonEmpty) {
-      MetaLock.unlock(info.head.short_table_name, commit_id)
+      MetaVersion.deleteShortTableName(info.head.short_table_name, info.head.table_name)
       deleteUndoLog(UndoLogType.ShortTableName.toString, table_id, commit_id)
+    }
+  }
+
+  private def rollBackMaterialView(table_id: String, commit_id: String): Unit = {
+    val info = getUndoLogInfo(UndoLogType.Material.toString, table_id, commit_id)
+    if (info.nonEmpty) {
+      //unlock material view
+      unlockMaterialViewName(commit_id, info.head.short_table_name)
+
+      if (info.head.is_creating_view) {
+        //unlock material relation
+        info.head.relation_tables.split(",").map(m => RelationTable.build(m))
+          .foreach(table => {
+            unlockMaterialRelation(commit_id = commit_id, table_id = table.tableId)
+          })
+      }
+
+      //delete undo log
+      deleteUndoLog(
+        commit_type = UndoLogType.Material.toString,
+        table_id = table_id,
+        commit_id = commit_id)
     }
   }
 

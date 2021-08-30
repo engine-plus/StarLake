@@ -16,13 +16,14 @@
 
 package com.engineplus.star.tables.execution
 
+import com.engineplus.star.meta.MetaVersion
 import com.engineplus.star.tables.StarTable
 import org.apache.spark.sql.catalyst.analysis.UnresolvedAttribute
 import org.apache.spark.sql.catalyst.expressions.Expression
 import org.apache.spark.sql.catalyst.plans.logical.{Assignment, DeleteFromTable, StarUpsert, UpdateTable}
-import org.apache.spark.sql.functions.expr
 import org.apache.spark.sql.star.SnapshotManagement
-import org.apache.spark.sql.star.commands.{CleanupCommand, CompactionCommand, DropPartitionCommand, DropTableCommand}
+import org.apache.spark.sql.star.commands._
+import org.apache.spark.sql.star.exception.StarLakeErrors
 import org.apache.spark.sql.star.rules.PreprocessTableUpsert
 import org.apache.spark.sql.star.sources.StarLakeSQLConf
 import org.apache.spark.sql.star.utils.AnalysisHelper
@@ -57,7 +58,7 @@ trait StarTableOperations extends AnalysisHelper {
 
   protected def executeUpsert(targetTable: StarTable,
                               sourceDF: DataFrame,
-                              condition: Expression): Unit = {
+                              condition: String): Unit = {
 
     val target = targetTable.toDF.queryExecution.analyzed
     val source = sourceDF.queryExecution.analyzed
@@ -92,8 +93,7 @@ trait StarTableOperations extends AnalysisHelper {
       condition,
       if (shouldAutoMigrate) Some(finalSchema) else None)
 
-    val upsertCommand = PreprocessTableUpsert(sparkSession.sessionState.conf)(upsert)
-    upsertCommand.run(sparkSession)
+    toDataset(sparkSession, PreprocessTableUpsert(sparkSession.sessionState.conf)(upsert))
 
   }
 
@@ -103,18 +103,12 @@ trait StarTableOperations extends AnalysisHelper {
                                   condition: String,
                                   force: Boolean = true,
                                   mergeOperatorInfo: Map[String, String]): Unit = {
-    condition match {
-      case "" => CompactionCommand(
-        snapshotManagement,
-        None,
-        force,
-        mergeOperatorInfo).run(sparkSession)
-      case _ => CompactionCommand(
-        snapshotManagement,
-        Option(expr(condition).expr),
-        force,
-        mergeOperatorInfo).run(sparkSession)
-    }
+    toDataset(sparkSession, CompactionCommand(
+      snapshotManagement,
+      condition,
+      force,
+      mergeOperatorInfo))
+
   }
 
 
@@ -124,7 +118,12 @@ trait StarTableOperations extends AnalysisHelper {
   }
 
   protected def executeDropTable(snapshotManagement: SnapshotManagement): Unit = {
-    DropTableCommand.run(snapshotManagement.snapshot)
+    val snapshot = snapshotManagement.snapshot
+    val tableInfo = snapshot.getTableInfo
+    if (!MetaVersion.isTableIdExists(tableInfo.table_name, tableInfo.table_id)) {
+      StarLakeErrors.tableNotFoundException(tableInfo.table_name, tableInfo.table_id)
+    }
+    DropTableCommand.run(snapshot)
   }
 
   protected def executeDropPartition(snapshotManagement: SnapshotManagement,
@@ -132,6 +131,11 @@ trait StarTableOperations extends AnalysisHelper {
     DropPartitionCommand.run(
       snapshotManagement.snapshot,
       condition)
+  }
+
+
+  protected def executeUpdateForMaterialView(snapshotManagement: SnapshotManagement): Unit = {
+    toDataset(sparkSession, UpdateMaterialViewCommand(snapshotManagement))
   }
 
 }

@@ -18,8 +18,11 @@ package com.engineplus.star.meta
 
 import java.util.concurrent.TimeUnit
 
+import com.engineplus.star.meta.MetaCommit.{unlockMaterialRelation, unlockMaterialViewName}
 import com.engineplus.star.meta.UndoLog.{deleteUndoLog, getUndoLogInfo, updateRedoTimestamp}
 import org.apache.spark.internal.Logging
+import org.apache.spark.sql.star.SnapshotManagement
+import org.apache.spark.sql.star.utils.RelationTable
 
 object Redo extends Logging {
   def redoCommit(table_name: String, table_id: String, commit_id: String): Boolean = {
@@ -32,8 +35,10 @@ object Redo extends Logging {
       redoPartitionLock(table_id, commit_id)
       redoStreamingRecord(table_id, commit_id)
       redoShortTableName(table_id, commit_id)
+      redoMaterialView(table_id, commit_id)
 
       deleteUndoLog(UndoLogType.Commit.toString, table_id, commit_id)
+      SnapshotManagement(table_name).updateSnapshot()
       true
     } else {
       TimeUnit.SECONDS.sleep(10)
@@ -113,10 +118,54 @@ object Redo extends Logging {
   private def redoShortTableName(table_id: String, commit_id: String): Unit = {
     val info = getUndoLogInfo(UndoLogType.ShortTableName.toString, table_id, commit_id)
     if (info.nonEmpty) {
-      MetaVersion.addShortTableName(info.head.short_table_name, info.head.table_name)
-      MetaLock.unlock(info.head.short_table_name, commit_id)
+      //add short name to table_info
+      MetaVersion.updateTableShortName(
+        info.head.table_name,
+        table_id,
+        info.head.short_table_name)
       deleteUndoLog(UndoLogType.ShortTableName.toString, table_id, commit_id)
     }
   }
+
+  private def redoMaterialView(table_id: String, commit_id: String): Unit = {
+    val undoInfo = getUndoLogInfo(UndoLogType.Material.toString, table_id, commit_id)
+    if (undoInfo.nonEmpty) {
+      val info = undoInfo.head
+      if (info.is_creating_view) {
+        //add material view
+        MaterialView.addMaterialView(
+          info.short_table_name,
+          info.table_name,
+          table_id,
+          info.relation_tables,
+          info.sql_text,
+          info.auto_update)
+        //unlock material view
+        unlockMaterialViewName(commit_id, info.short_table_name)
+
+        //update material relation
+        info.relation_tables.split(",").map(m => RelationTable.build(m)).foreach(table => {
+          //update
+          MetaCommit.updateMaterialRelation(
+            table_id = table.tableId,
+            table_name = table.tableName,
+            view_name = info.short_table_name)
+          //unlock material relation
+          unlockMaterialRelation(commit_id = commit_id, table_id = table.tableId)
+        })
+      } else {
+        //update material view
+        MaterialView.updateMaterialView(info.short_table_name, info.relation_tables, info.auto_update)
+        //unlock material view
+        unlockMaterialViewName(commit_id, info.short_table_name)
+      }
+      //delete undo log
+      deleteUndoLog(
+        commit_type = UndoLogType.Material.toString,
+        table_id = table_id,
+        commit_id = commit_id)
+    }
+  }
+
 
 }

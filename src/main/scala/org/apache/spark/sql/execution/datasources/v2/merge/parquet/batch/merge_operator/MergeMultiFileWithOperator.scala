@@ -88,7 +88,7 @@ class MergeMultiFileWithOperator(filesInfo: Seq[(MergePartitionedFile, Partition
   //get next batch
   val fileSeq: Seq[(MergePartitionedFile, ColumnarBatch)] = MergeUtils.getNextBatch(filesInfo)
   val mergeHeap = new MergeOptimizeHeap(versionKeyInfoMap)
-  mergeHeap.enqueueBySeq(MergeUtils.toBufferdIterator(fileSeq))
+  mergeHeap.enqueueBySeq(MergeUtils.toBufferedIterator(fileSeq))
 
   /** initialize mergeBatchColumnIndex and mergeColumnarBatch object */
   val mergeColumnIndexMap: mutable.Map[Long, Array[Int]] = mutable.Map[Long, Array[Int]]()
@@ -170,7 +170,7 @@ class MergeMultiFileWithOperator(filesInfo: Seq[(MergePartitionedFile, Partition
         val nextBatches = MergeUtils.getNextBatch(fileInfo)
 
         if (nextBatches.nonEmpty) {
-          val bufferIt = MergeUtils.toBufferdIterator(nextBatches)
+          val bufferIt = MergeUtils.toBufferedIterator(nextBatches)
           mergeHeap.enqueue(bufferIt.head)
         } else {
           mergeHeap.poll()

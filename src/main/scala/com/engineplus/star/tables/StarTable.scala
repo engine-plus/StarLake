@@ -25,11 +25,12 @@ import org.apache.hadoop.fs.Path
 import org.apache.spark.annotation._
 import org.apache.spark.internal.Logging
 import org.apache.spark.sql._
-import org.apache.spark.sql.catalyst.expressions.{Expression, Literal}
+import org.apache.spark.sql.catalyst.expressions.Expression
 import org.apache.spark.sql.execution.datasources.v2.merge.parquet.batch.merge_operator.MergeOperator
+import org.apache.spark.sql.star.commands.CreateMaterialViewCommand
 import org.apache.spark.sql.star.exception.StarLakeErrors
 import org.apache.spark.sql.star.sources.StarLakeSourceUtils
-import org.apache.spark.sql.star.{SnapshotManagement, StarLakeOptions, StarLakeUtils}
+import org.apache.spark.sql.star.{SnapshotManagement, StarLakeUtils}
 
 import scala.collection.JavaConverters._
 
@@ -275,21 +276,8 @@ class StarTable(df: => Dataset[Row], snapshotManagement: SnapshotManagement)
     * @param condition you can define a condition to filter Star data
     */
   def upsert(source: DataFrame, condition: String = ""): Unit = {
-    condition match {
-      case "" => upsert(source, Literal(true))
-      case _ => upsert(source, functions.expr(condition).expr)
-    }
-  }
-
-
-  def upsert(source: DataFrame): Unit = {
-    upsert(source, Literal(true))
-  }
-
-  def upsert(source: DataFrame, condition: Expression): Unit = {
     executeUpsert(this, source, condition)
   }
-
 
   //by default, force perform compaction on whole table
   def compaction(): Unit = {
@@ -425,6 +413,15 @@ class StarTable(df: => Dataset[Row], snapshotManagement: SnapshotManagement)
     executeDropPartition(snapshotManagement, condition)
   }
 
+  def updateMaterialView(): Unit = {
+    val tableInfo = snapshotManagement.snapshot.getTableInfo
+    if (!tableInfo.is_material_view) {
+      throw StarLakeErrors.notMaterialViewException(tableInfo.table_name, tableInfo.short_table_name.getOrElse("None"))
+    }
+
+    executeUpdateForMaterialView(snapshotManagement)
+  }
+
 
 }
 
@@ -503,24 +500,20 @@ object StarTable {
   def createMaterialView(viewName: String,
                          viewPath: String,
                          sqlText: String,
-                         rangePartitions: Seq[String] = Nil,
-                         hashPartitions: Seq[String] = Nil,
-                         hashBucketNum: Int = -1): Unit = {
-    val dfWriter = SparkSession.active.sql(sqlText)
-      .write
-      .format(StarLakeSourceUtils.NAME)
-      .mode("overwrite")
-
-    if (rangePartitions.nonEmpty) {
-      dfWriter.option(StarLakeOptions.RANGE_PARTITIONS, rangePartitions.mkString(","))
-    }
-    if (hashPartitions.nonEmpty) {
-      dfWriter.option(StarLakeOptions.HASH_PARTITIONS, hashPartitions.mkString(","))
-      dfWriter.option(StarLakeOptions.HASH_BUCKET_NUM, hashBucketNum)
-    }
-
-    dfWriter.option("isStarLakeMaterialView", "true")
-    dfWriter.save(viewPath)
+                         rangePartitions: String = "",
+                         hashPartitions: String = "",
+                         hashBucketNum: Int = -1,
+                         autoUpdate: Boolean = false): Unit = {
+    CreateMaterialViewCommand(
+      viewName,
+      viewPath,
+      sqlText,
+      rangePartitions,
+      hashPartitions,
+      hashBucketNum.toString,
+      autoUpdate)
+      .run(SparkSession.active)
   }
+
 
 }

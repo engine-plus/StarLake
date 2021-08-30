@@ -29,6 +29,9 @@ object MetaTableManage {
     initUndoLog()
     initLockInfo()
     initStreamingInfo()
+    initTableRelation()
+    initMaterialRelation()
+    initMaterialView()
   }
 
   def initDatabase(): Unit = {
@@ -48,7 +51,7 @@ object MetaTableManage {
       session.execute(
         s"""
            |CREATE TABLE $database.table_info (
-           | table_name text,
+           |  table_name text,
            |	table_id text,
            |	table_schema text,
            |	range_column text,
@@ -56,8 +59,9 @@ object MetaTableManage {
            |	setting map<text,text>,
            |	read_version int,
            |	pre_write_version int,
-           |	commit_id text,
            |	bucket_num int,
+           |  short_table_name text,
+           |  is_material_view boolean,
            |	PRIMARY KEY (table_name)
            |) WITH bloom_filter_fp_chance = 0.01
            |    AND caching = {'keys': 'ALL', 'rows_per_partition': 'ALL'}
@@ -80,7 +84,6 @@ object MetaTableManage {
            |  table_name text,
            |	read_version bigint,
            |	pre_write_version bigint,
-           |	commit_id text,
            |	last_update_timestamp bigint,
            |	delta_file_num int,
            |	be_compacted boolean,
@@ -147,6 +150,11 @@ object MetaTableManage {
            |	is_base_file boolean,
            |	query_id text,
            |  batch_id bigint,
+           |  short_table_name text,
+           |  sql_text text,
+           |  relation_tables text,
+           |  auto_update boolean,
+           |  is_creating_view boolean,
            |	PRIMARY KEY ((commit_type,table_id), commit_id, range_id, file_path)
            |) WITH bloom_filter_fp_chance = 0.01
            |    AND caching = {'keys': 'ALL', 'rows_per_partition': 'ALL'}
@@ -215,6 +223,66 @@ object MetaTableManage {
     })
   }
 
+
+  def initTableRelation(): Unit = {
+    cassandraConnector.withSessionDo(session => {
+      session.execute(s"drop table if exists $database.table_relation")
+      session.execute(
+        s"""
+           |CREATE TABLE $database.table_relation (
+           |  short_table_name text,
+           |	table_name text,
+           |	PRIMARY KEY (short_table_name)
+           |) WITH bloom_filter_fp_chance = 0.01
+           |    AND caching = {'keys': 'ALL', 'rows_per_partition': 'ALL'}
+           |    AND compaction = {'class': 'LeveledCompactionStrategy', 'sstable_size_in_mb': 32}
+           |    AND gc_grace_seconds = 3600
+           |    AND comment = 'material view info'
+        """.stripMargin)
+    })
+  }
+
+  def initMaterialView(): Unit = {
+    cassandraConnector.withSessionDo(session => {
+      session.execute(s"drop table if exists $database.material_view")
+      session.execute(
+        s"""
+           |CREATE TABLE $database.material_view (
+           |  view_name text,
+           |	table_name text,
+           |  table_id text,
+           |  relation_tables text,
+           |  sql_text text,
+           |  auto_update boolean,
+           |	PRIMARY KEY (view_name)
+           |) WITH bloom_filter_fp_chance = 0.01
+           |    AND caching = {'keys': 'ALL', 'rows_per_partition': 'ALL'}
+           |    AND compaction = {'class': 'LeveledCompactionStrategy', 'sstable_size_in_mb': 32}
+           |    AND gc_grace_seconds = 3600
+           |    AND comment = 'material view info'
+        """.stripMargin)
+    })
+  }
+
+  def initMaterialRelation(): Unit = {
+    cassandraConnector.withSessionDo(session => {
+      session.execute(s"drop table if exists $database.material_relation")
+      session.execute(
+        s"""
+           |CREATE TABLE $database.material_relation (
+           |  table_id text,
+           |  table_name text,
+           |  material_views text,
+           |	PRIMARY KEY (table_id)
+           |) WITH bloom_filter_fp_chance = 0.01
+           |    AND caching = {'keys': 'ALL', 'rows_per_partition': 'ALL'}
+           |    AND compaction = {'class': 'LeveledCompactionStrategy', 'sstable_size_in_mb': 32}
+           |    AND gc_grace_seconds = 3600
+           |    AND comment = 'material views of table'
+        """.stripMargin)
+    })
+  }
+
   def cleanTableInfo(): Unit = {
     cassandraConnector.withSessionDo(session => {
       session.execute(
@@ -274,6 +342,33 @@ object MetaTableManage {
       session.execute(
         s"""
            |truncate $database.streaming_info
+        """.stripMargin)
+    })
+  }
+
+  def cleanTableRelation(): Unit = {
+    cassandraConnector.withSessionDo(session => {
+      session.execute(
+        s"""
+           |truncate $database.table_relation
+        """.stripMargin)
+    })
+  }
+
+  def cleanMaterialView(): Unit = {
+    cassandraConnector.withSessionDo(session => {
+      session.execute(
+        s"""
+           |truncate $database.material_view
+        """.stripMargin)
+    })
+  }
+
+  def cleanMaterialRelation(): Unit = {
+    cassandraConnector.withSessionDo(session => {
+      session.execute(
+        s"""
+           |truncate $database.material_relation
         """.stripMargin)
     })
   }

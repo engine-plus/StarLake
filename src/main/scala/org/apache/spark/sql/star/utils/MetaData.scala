@@ -58,7 +58,8 @@ case class TableInfo(table_name: String,
                      bucket_num: Int = -1,
                      configuration: Map[String, String] = Map.empty,
                      schema_version: Int = 1,
-                     short_table_name: Option[String] = None) {
+                     short_table_name: Option[String] = None,
+                     is_material_view: Boolean = false) {
 
   lazy val table_path: Path = new Path(table_name)
   lazy val range_partition_columns: Seq[String] = range_partition_schema.fieldNames
@@ -139,7 +140,8 @@ case class DataFileInfo(file_path: String,
 
 case class PartitionFilterInfo(range_id: String,
                                range_value: String,
-                               range_partitions: Map[String, String])
+                               range_partitions: Map[String, String],
+                               read_version: Long)
 
 
 /**
@@ -188,7 +190,48 @@ case class undoLogInfo(commit_type: String,
                        is_base_file: Boolean,
                        query_id: String,
                        batch_id: Long,
-                       short_table_name: String)
+                       short_table_name: String,
+                       sql_text: String,
+                       relation_tables: String,
+                       auto_update: Boolean,
+                       is_creating_view: Boolean)
 
 case class Format(provider: String = "parquet",
                   options: Map[String, String] = Map.empty)
+
+
+case class CommitOptions(shortTableName: Option[String],
+                         materialInfo: Option[MaterialViewInfo])
+
+/**
+  * Material View Info
+  *
+  * @param sqlText        sql in text format to create material view
+  * @param relationTables relation tables, the value is a format "table_id->table_name,table1->oss://test/path"
+  */
+case class MaterialViewInfo(sqlText: String,
+                            relationTables: Seq[RelationTable],
+                            autoUpdate: Boolean,
+                            isCreatingView: Boolean = false)
+
+case class RelationTable(tableName: String,
+                         tableId: String,
+                         partitionInfo: Seq[(String, String)]) {
+  override def toString: String = {
+    tableName + "\001" + tableId + "\001" + partitionInfo.sortBy(_._1).map(m => m._1 + "->" + m._2).mkString("\002")
+  }
+
+}
+
+object RelationTable {
+  def build(relationTables: String): RelationTable = {
+    val split = relationTables.split("\001")
+    val tableName = split(0)
+    val tableId = split(1)
+    val partitionInfo = split(2).split("\002").map(m => {
+      val part = m.split("->")
+      (part(0), part(1))
+    })
+    RelationTable(tableName, tableId, partitionInfo)
+  }
+}

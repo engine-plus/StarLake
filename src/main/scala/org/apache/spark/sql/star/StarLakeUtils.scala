@@ -24,16 +24,20 @@ import org.apache.spark.sql.catalyst.catalog.CatalogTable
 import org.apache.spark.sql.catalyst.expressions.{Expression, PredicateHelper, SubqueryExpression}
 import org.apache.spark.sql.catalyst.planning.PhysicalOperation
 import org.apache.spark.sql.catalyst.plans.logical.LogicalPlan
+import org.apache.spark.sql.execution.SparkPlan
 import org.apache.spark.sql.execution.datasources.LogicalRelation
+import org.apache.spark.sql.execution.datasources.v2.merge.MergeDeltaParquetScan
 import org.apache.spark.sql.execution.datasources.v2.merge.parquet.batch.merge_operator.MergeOperator
-import org.apache.spark.sql.execution.datasources.v2.{DataSourceV2Relation, DataSourceV2ScanRelation}
+import org.apache.spark.sql.execution.datasources.v2.{BatchScanExec, DataSourceV2Relation, DataSourceV2ScanRelation, FileScan}
 import org.apache.spark.sql.star.catalog.StarLakeTableV2
 import org.apache.spark.sql.star.exception.StarLakeErrors
 import org.apache.spark.sql.star.rules.StarLakeRelation
 import org.apache.spark.sql.star.sources.{StarLakeBaseRelation, StarLakeSourceUtils}
-import org.apache.spark.sql.star.utils.DataFileInfo
+import org.apache.spark.sql.star.utils.{DataFileInfo, RelationTable}
 import org.apache.spark.sql.{AnalysisException, SparkSession}
 import org.apache.spark.util.Utils
+
+import scala.collection.mutable.ArrayBuffer
 
 
 object StarLakeUtils extends PredicateHelper {
@@ -153,7 +157,7 @@ object StarLakeUtils extends PredicateHelper {
   def replaceFileIndexV2(target: LogicalPlan,
                          files: Seq[DataFileInfo]): LogicalPlan = {
     EliminateSubqueryAliases(target) match {
-      case sr @ DataSourceV2Relation(tbl: StarLakeTableV2,_,_,_,_) =>
+      case sr@DataSourceV2Relation(tbl: StarLakeTableV2, _, _, _, _) =>
         sr.copy(table = tbl.copy(userDefinedFileIndex = Option(BatchDataFileIndexV2(tbl.spark, tbl.snapshotManagement, files))))
 
       case _ => throw StarLakeErrors.starRelationIllegalException()
@@ -168,6 +172,32 @@ object StarLakeUtils extends PredicateHelper {
     // indexes and these must be GCed when the data they are tied to is GCed.
     (pathName.startsWith(".") || pathName.startsWith("_")) &&
       !partitionColumnNames.exists(c => pathName.startsWith(c ++ "="))
+  }
+
+
+  def parseRelationTableInfo(plan: SparkPlan, array: ArrayBuffer[RelationTable]): Unit = {
+    plan match {
+      case BatchScanExec(_, scan) =>
+        val (fileIndex, filters) = scan match {
+          case fileScan: FileScan if fileScan.fileIndex.isInstanceOf[StarLakeFileIndexV2] =>
+            (fileScan.fileIndex.asInstanceOf[StarLakeFileIndexV2], fileScan.partitionFilters)
+
+          case mergeScan: MergeDeltaParquetScan => (mergeScan.getFileIndex, mergeScan.getPartitionFilters)
+
+          case _ => throw StarLakeErrors.materialViewBuildWithNonStarTableException()
+        }
+
+        val tableName = fileIndex.tableName
+        val snapshot = fileIndex.snapshotManagement.snapshot
+        val partitionInfo = PartitionFilter.partitionsForScan(snapshot, filters)
+          .map(m => (m.range_id, m.read_version.toString))
+
+        array += RelationTable(tableName, snapshot.getTableInfo.table_id, partitionInfo)
+
+      case p: SparkPlan if p.children.nonEmpty => p.children.foreach(parseRelationTableInfo(_, array))
+
+      case _ => throw StarLakeErrors.materialViewBuildWithNonStarTableException()
+    }
   }
 
 }
@@ -231,7 +261,7 @@ object StarLakeTableV2ScanRelation {
 }
 
 
-class MergeOpLong extends MergeOperator[Long]{
+class MergeOpLong extends MergeOperator[Long] {
   override def mergeData(input: Seq[Long]): Long = {
     input.sum
   }

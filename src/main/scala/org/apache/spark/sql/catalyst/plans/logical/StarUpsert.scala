@@ -16,12 +16,12 @@
 
 package org.apache.spark.sql.catalyst.plans.logical
 
-import org.apache.spark.sql.catalyst.expressions.{Attribute, Expression}
+import org.apache.spark.sql.catalyst.expressions.Attribute
 import org.apache.spark.sql.types.StructType
 
 case class StarUpsert(target: LogicalPlan,
                       source: LogicalPlan,
-                      condition: Expression,
+                      condition: String,
                       migratedSchema: Option[StructType] = None) extends Command {
 
   override def children: Seq[LogicalPlan] = Seq(target, source)

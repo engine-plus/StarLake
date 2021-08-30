@@ -39,7 +39,7 @@ object MergeUtils {
     * @param seq
     * @return
     */
-  def toBufferdIterator(seq: Seq[(MergePartitionedFile, ColumnarBatch)]): Seq[(Long, BufferedIterator[(InternalRow, Int)])] = {
+  def toBufferedIterator(seq: Seq[(MergePartitionedFile, ColumnarBatch)]): Seq[(Long, BufferedIterator[(InternalRow, Int)])] = {
     seq.map(tuple => tuple._1.writeVersion -> tuple._2.rowIterator().asScala.zipWithIndex.buffered)
   }
 
@@ -87,28 +87,6 @@ object MergeUtils {
     new MergeColumnarBatchNew(arrayColumn, mergeOps, indexTypeArray)
   }
 
-  //initialize mergeColumnarBatch object
-//  def initMergeBatch(fileSeq: Seq[(MergePartitionedFile, ColumnarBatch)]): MergeColumnarBatch = {
-//    val arrayColumn =
-//      fileSeq.sortWith((t1, t2) => t1._1.writeVersion < t2._1.writeVersion).toArray
-//        .map(t => {
-//          Range(0, t._2.numCols()).map(t._2.column)
-//        })
-//        .flatMap(_.toSeq)
-//    new MergeColumnarBatch(arrayColumn)
-//  }
-
-  def initMergeBatch(file: (MergePartitionedFile, ColumnarBatch), resIndex: Array[Int]): SingletonFileColumnarBatch = {
-    val columnArr =
-      resIndex.map(res => {
-        if (res == -1) {
-          null
-        } else {
-          file._2.column(res)
-        }
-      })
-    new SingletonFileColumnarBatch(columnArr)
-  }
 
   def resetBatchIndex(resultIndex: Array[(Integer, Integer)]): Unit = {
     for (i <- resultIndex.indices) {

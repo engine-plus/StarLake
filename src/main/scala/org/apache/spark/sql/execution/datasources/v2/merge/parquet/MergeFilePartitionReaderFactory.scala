@@ -40,12 +40,6 @@ abstract class MergeFilePartitionReaderFactory(mergeOperatorInfo: Map[String, Me
         new MergeParquetSingletonFilePartitionByBatchFile[InternalRow](iter)
       } else {
         new MergeParquetFileWithOperatorPartitionByBatchFile[InternalRow](iter, mergeOperatorInfo)
-//        if(mergeOperatorInfo.isEmpty){
-//          new MergeParquetFilePartitionByBatchFile[InternalRow](iter)
-////          new MergeParquetFileWithOperatorPartitionByBatchFile[InternalRow](iter, mergeOperatorInfo)
-//        }else{
-//          new MergeParquetFileWithOperatorPartitionByBatchFile[InternalRow](iter, mergeOperatorInfo)
-//        }
       }
 
     new MergeFilePartitionReader[InternalRow](

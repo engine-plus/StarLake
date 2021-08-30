@@ -221,52 +221,5 @@ object FileOperation extends Logging {
     (it, path)
   }
 
-  /** Register a task failure listener to delete a temp file in our best effort. */
-  //  def registerTempFileDeletionTaskFailureListener(
-  //                                                   conf: Configuration,
-  //                                                   tempPath: Path): Unit = {
-  //    val tc = TaskContext.get
-  //    if (tc == null) {
-  //      throw new IllegalStateException("Not running on a Spark task thread")
-  //    }
-  //    tc.addTaskFailureListener { (_, _) =>
-  //      // Best effort to delete the temp file
-  //      try {
-  //        tempPath.getFileSystem(conf).delete(tempPath, false /* = recursive */)
-  //      } catch {
-  //        case NonFatal(e) =>
-  //          logError(s"Failed to delete $tempPath", e)
-  //      }
-  //      () // Make the compiler happy
-  //    }
-  //  }
-
-  /**
-    * Reads Parquet footers in multi-threaded manner.
-    * If the config "spark.sql.files.ignoreCorruptFiles" is set to true, we will ignore the corrupted
-    * files when reading footers.
-    */
-  //  def readParquetFootersInParallel(conf: Configuration,
-  //                                    partFiles: Seq[FileStatus],
-  //                                    ignoreCorruptFiles: Boolean): Seq[Footer] = {
-  //    ThreadUtils.parmap(partFiles, "readingParquetFooters", 8) { currentFile =>
-  //      try {
-  //        // Skips row group information since we only need the schema.
-  //        // ParquetFileReader.readFooter throws RuntimeException, instead of IOException,
-  //        // when it can't read the footer.
-  //        Some(new Footer(currentFile.getPath(),
-  //          ParquetFileReader.readFooter(
-  //            conf, currentFile, SKIP_ROW_GROUPS)))
-  //      } catch { case e: RuntimeException =>
-  //        if (ignoreCorruptFiles) {
-  //          logWarning(s"Skipped the footer in the corrupted file: $currentFile", e)
-  //          None
-  //        } else {
-  //          throw new IOException(s"Could not read footer for file: $currentFile", e)
-  //        }
-  //      }
-  //    }.flatten
-  //  }
-
 
 }

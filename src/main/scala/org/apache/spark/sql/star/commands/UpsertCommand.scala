@@ -17,12 +17,13 @@
 package org.apache.spark.sql.star.commands
 
 import org.apache.spark.sql.catalyst.expressions.And
+import org.apache.spark.sql.catalyst.plans.QueryPlan
 import org.apache.spark.sql.star._
 import org.apache.spark.sql.star.exception.StarLakeErrors
 import org.apache.spark.sql.star.utils.DataFileInfo
 //import org.apache.spark.sql.star.actions.AddFile
 import org.apache.spark.sql._
-import org.apache.spark.sql.catalyst.expressions.{Alias, AttributeReference, Expression, Literal, NamedExpression, PredicateHelper}
+import org.apache.spark.sql.catalyst.expressions.{Alias, AttributeReference, Literal, NamedExpression, PredicateHelper}
 import org.apache.spark.sql.catalyst.plans.logical._
 import org.apache.spark.sql.execution.command.RunnableCommand
 import org.apache.spark.sql.functions._
@@ -78,15 +79,17 @@ case class UpsertStats(
   * @param source                   Source data to merge from
   * @param target                   Target table to merge into
   * @param targetSnapshotManagement snapshotManagement of the target table
-  * @param condition                Condition for a source row to match with a target row
+  * @param conditionString          Condition for a source row to match with a target row
   * @param migratedSchema           The final schema of the target - may be changed by schema evolution.
   */
 case class UpsertCommand(@transient source: LogicalPlan,
                          @transient target: LogicalPlan,
                          @transient targetSnapshotManagement: SnapshotManagement,
-                         condition: Expression,
+                         conditionString: String,
                          migratedSchema: Option[StructType]) extends RunnableCommand
   with Command with PredicateHelper with AnalysisHelper with ImplicitMetadataOperation {
+
+  override def innerChildren: Seq[QueryPlan[_]] = Seq(target, source)
 
   private val tableInfo = targetSnapshotManagement.snapshot.getTableInfo
 
@@ -98,7 +101,11 @@ case class UpsertCommand(@transient source: LogicalPlan,
   override val shortTableName: Option[String] = None
 
 
-  override def run(spark: SparkSession): Seq[Row] = {
+  final override def run(spark: SparkSession): Seq[Row] = {
+    val condition = conditionString match {
+      case "" => Literal(true)
+      case _ => expr(conditionString).expr
+    }
     targetSnapshotManagement.withNewTransaction { tc =>
       if (target.schema.size != tableInfo.schema.size) {
         throw StarLakeErrors.schemaChangedSinceAnalysis(

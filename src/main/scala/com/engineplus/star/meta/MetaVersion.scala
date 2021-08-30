@@ -128,7 +128,8 @@ object MetaVersion {
                      range_column: String,
                      hash_column: String,
                      setting: String,
-                     bucket_num: Int): Unit = {
+                     bucket_num: Int,
+                     is_material_view: Boolean): Unit = {
     cassandraConnector.withSessionDo(session => {
       val table_schema_index = if (table_schema.length > MetaUtils.MAX_SIZE_PER_VALUE) {
         FragmentValue.splitLargeValueIntoFragmentValues(table_id, table_schema)
@@ -140,9 +141,9 @@ object MetaVersion {
         s"""
            |insert into $database.table_info
            |(table_name,table_id,table_schema,range_column,hash_column,setting,read_version,pre_write_version,
-           |bucket_num,short_table_name)
+           |bucket_num,short_table_name,is_material_view)
            |values ('$table_name','$table_id','$table_schema_index','$range_column','$hash_column',$setting,1,1,
-           |$bucket_num,'$defaultValue')
+           |$bucket_num,'$defaultValue',$is_material_view)
            |if not exists
       """.stripMargin)
       if (!res.wasApplied()) {
@@ -179,7 +180,8 @@ object MetaVersion {
     cassandraConnector.withSessionDo(session => {
       val res = session.execute(
         s"""
-           |select table_id,table_schema,range_column,hash_column,setting,read_version,bucket_num,short_table_name
+           |select table_id,table_schema,range_column,hash_column,setting,read_version,bucket_num,
+           |short_table_name,is_material_view
            |from $database.table_info where table_name='$table_name'
       """.stripMargin).one()
       val table_id = res.getString("table_id")
@@ -202,7 +204,8 @@ object MetaVersion {
         res.getInt("bucket_num"),
         res.getMap("setting", classOf[String], classOf[String]).toMap,
         res.getInt("read_version"),
-        if (short_table_name.equals(defaultValue)) None else Some(short_table_name)
+        if (short_table_name.equals(defaultValue)) None else Some(short_table_name),
+        res.getBool("is_material_view")
       )
     })
 
@@ -357,12 +360,13 @@ object MetaVersion {
     })
   }
 
-  def deleteShortTableName(short_table_name: String): Unit = {
+  def deleteShortTableName(short_table_name: String, table_name: String): Unit = {
     cassandraConnector.withSessionDo(session => {
       session.execute(
         s"""
            |delete from $database.table_relation
            |where short_table_name='$short_table_name'
+           |if table_name='$table_name'
         """.stripMargin)
     })
   }

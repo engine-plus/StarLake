@@ -19,6 +19,7 @@ package org.apache.spark.sql.star.commands
 import java.util.concurrent.TimeUnit
 
 import com.engineplus.star.meta._
+import com.engineplus.star.tables.StarTable
 import org.apache.hadoop.fs.Path
 import org.apache.spark.sql.SparkSession
 import org.apache.spark.sql.catalyst.expressions.{Expression, PredicateHelper}
@@ -37,10 +38,6 @@ object DropTableCommand {
 
     var i = 0
     while (i < MAX_ATTEMPTS) {
-      if (!MetaVersion.isTableIdExists(table_name, table_id)) {
-        StarLakeErrors.tableNotFoundException(table_name, table_id)
-      }
-
       if (UndoLog.addDropTableUndoLog(table_name, table_id)) {
         dropTable(snapshot)
         i = MAX_ATTEMPTS
@@ -83,17 +80,45 @@ object DropTableCommand {
     }
   }
 
-  private def dropTable(snapshot: Snapshot): Unit = {
-    val table_id = snapshot.getTableInfo.table_id
-    val table_name = snapshot.getTableInfo.table_name
-    val short_table_name = snapshot.getTableInfo.short_table_name
+  def dropTable(snapshot: Snapshot): Unit = {
+    val tableInfo = snapshot.getTableInfo
+    val table_id = tableInfo.table_id
+    val table_name = tableInfo.table_name
+    val short_table_name = tableInfo.short_table_name
 
+    //delete material views associated with this table
+    if (!tableInfo.is_material_view) {
+      val materialViews = MaterialView.getMaterialRelationInfo(table_id)
+      if (materialViews.nonEmpty) {
+        materialViews.split(",").foreach(view => StarTable.forName(view).dropTable())
+      }
+    }
     MetaVersion.deleteTableInfo(table_name, table_id)
-    if(short_table_name.isDefined){
-      MetaVersion.deleteShortTableName(short_table_name.get)
+
+    if (short_table_name.isDefined) {
+      MetaVersion.deleteShortTableName(short_table_name.get, table_name)
+      //if this table is material view, clean relation info
+      if (tableInfo.is_material_view) {
+        //clean material_relation info
+        val materialViewInfo = MaterialView.getMaterialViewInfo(short_table_name.get)
+        if (materialViewInfo.isDefined) {
+          materialViewInfo.get.relationTables.foreach(table => {
+            val relationTableInfo = MetaVersion.getTableInfo(table.tableName)
+            //drop view from relation info
+            dropMaterialViewFromRelation(
+              relationTableInfo.table_id,
+              relationTableInfo.table_name,
+              short_table_name.get)
+          })
+        }
+
+        //clean material_view info
+        MaterialView.deleteMaterialView(short_table_name.get)
+      }
     }
 
     UndoLog.deleteUndoLogByTableId(UndoLogType.Commit.toString, table_id)
+    UndoLog.deleteUndoLogByTableId(UndoLogType.Material.toString, table_id)
     UndoLog.deleteUndoLogByTableId(UndoLogType.ShortTableName.toString, table_id)
     UndoLog.deleteUndoLogByTableId(UndoLogType.Partition.toString, table_id)
     UndoLog.deleteUndoLogByTableId(UndoLogType.Schema.toString, table_id)
@@ -117,6 +142,18 @@ object DropTableCommand {
 
     UndoLog.deleteUndoLogByTableId(UndoLogType.DropTable.toString, table_id)
     SnapshotManagement.invalidateCache(table_name)
+  }
+
+  private def dropMaterialViewFromRelation(table_id: String,
+                                           table_name: String,
+                                           view_name: String): Unit = {
+    val existsViews = MaterialView.getMaterialRelationInfo(table_id)
+    val newViews = existsViews.split(",").toSet.-(view_name).mkString(",")
+    if (newViews.isEmpty) {
+      MaterialView.deleteMaterialRelationInfo(table_id)
+    } else {
+      MaterialView.updateMaterialRelationInfo(table_id, table_name, newViews)
+    }
   }
 
 
@@ -188,7 +225,7 @@ object DropPartitionCommand extends PredicateHelper {
     }
   }
 
-  private def dropPartition(table_name: String, table_id: String, range_value: String, range_id: String): Unit = {
+  def dropPartition(table_name: String, table_id: String, range_value: String, range_id: String): Unit = {
     MetaVersion.deletePartitionInfoByRangeId(table_id, range_value, range_id)
     UndoLog.deleteUndoLogByRangeId(UndoLogType.Partition.toString, table_id, range_id)
     UndoLog.deleteUndoLogByRangeId(UndoLogType.AddFile.toString, table_id, range_id)

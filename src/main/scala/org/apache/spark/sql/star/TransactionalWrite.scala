@@ -28,7 +28,7 @@ import org.apache.spark.sql.internal.SQLConf
 import org.apache.spark.sql.star.exception.StarLakeErrors
 import org.apache.spark.sql.star.schema.{InvariantCheckerExec, Invariants, SchemaUtils}
 import org.apache.spark.sql.star.sources.StarLakeSQLConf
-import org.apache.spark.sql.star.utils.DataFileInfo
+import org.apache.spark.sql.star.utils.{DataFileInfo, MaterialViewInfo}
 import org.apache.spark.sql.types.StructType
 import org.apache.spark.util.SerializableConfiguration
 
@@ -42,6 +42,8 @@ trait TransactionalWrite {
   protected var commitType: Option[CommitType]
 
   protected var shortTableName: Option[String]
+
+  protected var materialInfo: Option[MaterialViewInfo]
 
   protected var hasWritten = false
 
@@ -111,6 +113,15 @@ trait TransactionalWrite {
   def writeFiles(oriData: Dataset[_],
                  writeOptions: Option[StarLakeOptions],
                  isCompaction: Boolean): Seq[DataFileInfo] = {
+    var updateMaterialView = false
+    if (writeOptions.isDefined) {
+      updateMaterialView = writeOptions.get.updateMaterialView
+    }
+    //can't update material view
+    if (snapshot.getTableInfo.is_material_view && !updateMaterialView) {
+      throw StarLakeErrors.updateMaterialViewWithCommonOperatorException()
+    }
+
     val data = if (tableInfo.hash_partition_columns.nonEmpty) {
       oriData.repartition(tableInfo.bucket_num, tableInfo.hash_partition_columns.map(col): _*)
     } else {

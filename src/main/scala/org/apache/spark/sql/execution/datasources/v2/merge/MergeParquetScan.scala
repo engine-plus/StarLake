@@ -55,6 +55,8 @@ abstract class MergeDeltaParquetScan(sparkSession: SparkSession,
                                      dataFilters: Seq[Expression] = Seq.empty)
   extends Scan with Batch
     with SupportsReportStatistics with Logging {
+  def getFileIndex: StarLakeFileIndexV2 = fileIndex
+  def getPartitionFilters: Seq[Expression] = partitionFilters
   def isSplittable(path: Path): Boolean = false
 
   //it may has to many delta files, check if we should compact part of files first to save memory

@@ -17,7 +17,7 @@
 package org.apache.spark.sql.star
 
 import com.engineplus.star.tables.StarTable
-import org.apache.spark.sql.catalyst.analysis.{NoSuchTableException, TableAlreadyExistsException}
+import org.apache.spark.sql.catalyst.analysis.TableAlreadyExistsException
 import org.apache.spark.sql.connector.catalog.{CatalogV2Util, Identifier, Table, TableCatalog}
 import org.apache.spark.sql.connector.expressions._
 import org.apache.spark.sql.functions._
@@ -429,21 +429,13 @@ class DataFrameWriterV2Suite
       Seq(Row(1L, "a"), Row(2L, "b"), Row(3L, "c")))
   }
 
-  test("Create: basic behavior by path") {
+  test("Create: basic behavior by path - short table name can't be a path") {
     withTempDir { tempDir =>
       val dir = tempDir.getCanonicalPath
-      spark.table("source").writeTo(s"star.`$dir`").using("star").create()
-
-      checkAnswer(
-        spark.read.format("star").load(dir).select("id", "data"),
-        Seq(Row(1L, "a"), Row(2L, "b"), Row(3L, "c")))
-
-      val table = catalog.loadTable(Identifier.of(Array("star"), dir))
-
-      assert(table.name === s"star.`file:$dir`")
-      assert(table.schema === new StructType().add("id", LongType).add("data", StringType))
-      assert(table.partitioning.isEmpty)
-      assert(getProperties(table).isEmpty)
+      val e = intercept[AssertionError] {
+        spark.table("source").writeTo(s"star.`$dir`").using("star").create()
+      }
+      assert(e.getMessage.contains("Short Table name") && e.getMessage.contains("can't be a path"))
     }
   }
 

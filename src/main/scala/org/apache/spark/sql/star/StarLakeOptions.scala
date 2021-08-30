@@ -100,6 +100,23 @@ trait StarLakeWriteOptionsImpl extends StarLakeOptionParser {
     }
   }
 
+  def createMaterialView: Boolean = {
+    options.get(CREATE_MATERIAL_VIEW).exists(toBoolean(_, CREATE_MATERIAL_VIEW))
+  }
+
+  def updateMaterialView: Boolean = {
+    options.get(UPDATE_MATERIAL_VIEW).exists(toBoolean(_, UPDATE_MATERIAL_VIEW))
+  }
+
+  def materialSQLText: String = {
+    options.get(MATERIAL_SQL_TEXT).getOrElse("")
+  }
+
+  def materialAutoUpdate: Boolean = {
+    options.get(MATERIAL_AUTO_UPDATE)
+      .exists(toBoolean(_, MATERIAL_AUTO_UPDATE))
+  }
+
 
 }
 
@@ -129,6 +146,11 @@ object StarLakeOptions {
   val HASH_BUCKET_NUM = "hashBucketNum"
 
   val SHORT_TABLE_NAME = "shortTableName"
+
+  val CREATE_MATERIAL_VIEW = "createStarLakeMaterialView"
+  val UPDATE_MATERIAL_VIEW = "updateStarLakeMaterialView"
+  val MATERIAL_SQL_TEXT = "materialSQLText"
+  val MATERIAL_AUTO_UPDATE = "materialAutoUpdate"
 
   /** whether it is allowed to use delta file */
   val AllowDeltaFile = "allowDeltaFile"

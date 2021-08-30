@@ -90,7 +90,6 @@ object UndoLog extends Logging {
   def addShortTableNameUndoLog(table_name: String,
                                table_id: String,
                                commit_id: String,
-                               write_version: Long,
                                short_table_name: String): Unit = {
     insertUndoLog(
       commit_type = UndoLogType.ShortTableName.toString,
@@ -98,6 +97,26 @@ object UndoLog extends Logging {
       commit_id = commit_id,
       table_name = table_name,
       short_table_name = short_table_name)
+  }
+
+  def addMaterialUndoLog(table_name: String,
+                         table_id: String,
+                         commit_id: String,
+                         short_table_name: String,
+                         sql_text: String,
+                         relation_tables: String,
+                         auto_update: Boolean,
+                         is_creating_view: Boolean): Unit = {
+    insertUndoLog(
+      commit_type = UndoLogType.Material.toString,
+      table_id = table_id,
+      commit_id = commit_id,
+      table_name = table_name,
+      short_table_name = short_table_name,
+      sql_text = sql_text,
+      relation_tables = relation_tables,
+      auto_update = auto_update,
+      is_creating_view = is_creating_view)
   }
 
   def addFileUndoLog(table_name: String,
@@ -214,17 +233,23 @@ object UndoLog extends Logging {
                     delta_file_num: Int = default_value.toInt,
                     be_compacted: Boolean = true,
                     is_base_file: Boolean = false,
-                    short_table_name: String = default_value): Unit = {
+                    short_table_name: String = default_value,
+                    sql_text: String = default_value,
+                    relation_tables: String = default_value,
+                    auto_update: Boolean = false,
+                    is_creating_view: Boolean = false): Unit = {
     cassandraConnector.withSessionDo(session => {
+      val format_sql_text = MetaUtils.formatSqlTextToCassandra(sql_text)
       session.execute(
         s"""
            |insert into $database.undo_log
            |(commit_type,table_id,commit_id,range_id,file_path,table_name,range_value,tag,write_version,timestamp,
            |size,modification_time,table_schema,setting,file_exist_cols,delta_file_num,be_compacted,is_base_file,
-           |short_table_name)
+           |short_table_name,sql_text,relation_tables,auto_update,is_creating_view)
            |values ('$commit_type','$table_id','$commit_id','$range_id','$file_path','$table_name','$range_value',$tag,
            |$write_version,$timestamp,$size,$modification_time,'$table_schema',$setting,'$file_exist_cols',
-           |$delta_file_num,$be_compacted,$is_base_file,'$short_table_name')
+           |$delta_file_num,$be_compacted,$is_base_file,'$short_table_name','$format_sql_text','$relation_tables',
+           |$auto_update,$is_creating_view)
       """.stripMargin)
     })
 
@@ -376,7 +401,7 @@ object UndoLog extends Logging {
         s"""
            |select table_name,range_id,range_value,file_path,tag,write_version,timestamp,size,modification_time,
            |table_schema,setting,file_exist_cols,delta_file_num,be_compacted,is_base_file,query_id,batch_id,
-           |short_table_name
+           |short_table_name,sql_text,relation_tables,auto_update,is_creating_view
            |from $database.undo_log where commit_type='$commit_type' and table_id='$table_id'
            |and commit_id='$commit_id'
       """.stripMargin).getUninterruptibly()
@@ -406,7 +431,11 @@ object UndoLog extends Logging {
           re.getBool("is_base_file"),
           re.getString("query_id"),
           re.getLong("batch_id"),
-          re.getString("short_table_name"))
+          re.getString("short_table_name"),
+          MetaUtils.formatSqlTextFromCassandra(re.getString("sql_text")),
+          re.getString("relation_tables"),
+          re.getBool("auto_update"),
+          re.getBool("is_creating_view"))
       }
       arr_buf.toArray
     })
@@ -432,7 +461,7 @@ object UndoLog extends Logging {
         s"""
            |select commit_id,range_id,file_path,table_name,range_value,tag,write_version,timestamp,size,
            |modification_time,table_schema,setting,file_exist_cols,delta_file_num,be_compacted,
-           |is_base_file,query_id,batch_id,short_table_name
+           |is_base_file,query_id,batch_id,short_table_name,sql_text,relation_tables,auto_update,is_creating_view
            |from $database.undo_log where commit_type='$commit_type' and table_id='$table_id'
            |and timestamp<$limit_timestamp allow filtering
       """.stripMargin).getUninterruptibly()
@@ -462,7 +491,11 @@ object UndoLog extends Logging {
           re.getBool("is_base_file"),
           re.getString("query_id"),
           re.getLong("batch_id"),
-          re.getString("short_table_name"))
+          re.getString("short_table_name"),
+          MetaUtils.formatSqlTextFromCassandra(re.getString("sql_text")),
+          re.getString("relation_tables"),
+          re.getBool("auto_update"),
+          re.getBool("is_creating_view"))
       }
       arr_buf.toArray
     })

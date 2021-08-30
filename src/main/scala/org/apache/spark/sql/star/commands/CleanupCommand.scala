@@ -56,7 +56,7 @@ object CleanupCommand extends CleanupCommandImpl with Serializable{
     val retentionMillis = spark.conf.get(StarLakeSQLConf.OLD_VERSION_RETENTION_TIME)
     val deleteBeforeTimestamp = clock.getTimeMillis() - retentionMillis
 
-    MetaCommit.cleanUndoLog(snapshotManagement.getTableInfoOnly.table_id)
+    MetaCommit.cleanUndoLog(snapshotManagement.snapshot)
     snapshotManagement.updateSnapshot().getPartitionInfoArray.foreach(partitionInfo => {
       DataOperation.removeFileByName(
         partitionInfo.table_id,

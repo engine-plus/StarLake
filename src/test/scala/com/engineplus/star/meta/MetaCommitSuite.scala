@@ -22,7 +22,7 @@ import com.engineplus.star.meta.MetaCommit.generateCommitIdToAddUndoLog
 import com.engineplus.star.tables.StarTable
 import org.apache.spark.sql.star.exception.MetaRerunException
 import org.apache.spark.sql.star.test.StarLakeTestUtils
-import org.apache.spark.sql.star.utils.{DataFileInfo, MetaInfo, PartitionInfo}
+import org.apache.spark.sql.star.utils.{CommitOptions, DataFileInfo, MetaInfo, PartitionInfo}
 import org.apache.spark.sql.test.SharedSparkSession
 import org.apache.spark.sql.types.StructType
 import org.apache.spark.sql.{AnalysisException, DataFrame, QueryTest}
@@ -110,7 +110,7 @@ trait MetaCommitSuiteBase extends QueryTest
           newPartitionInfoArr,
           CommitType(commitType))
 
-        MetaCommit.doMetaCommit(metaInfo, changeSchema, None)
+        MetaCommit.doMetaCommit(metaInfo, changeSchema, CommitOptions(None, None))
         partitionInfoArr = MetaVersion.getAllPartitionInfo(tableInfo.table_id)
         assert(partitionInfoArr.map(_.read_version).forall(_ == 2))
         assert(partitionInfoArr.forall(m => {
@@ -166,7 +166,7 @@ trait MetaCommitSuiteBase extends QueryTest
         for (i <- 0 until taskNum) {
           pool.execute(new Runnable {
             override def run(): Unit = {
-              MetaCommit.doMetaCommit(arrMetaInfo(i), false, None)
+              MetaCommit.doMetaCommit(arrMetaInfo(i), false, CommitOptions(None, None))
             }
           })
 
@@ -245,7 +245,7 @@ class MetaCommitSuite extends MetaCommitSuiteBase {
         tableInfo,
         newPartitionInfoArr2,
         CommitType("simple"))
-      MetaCommit.doMetaCommit(metaInfo2, false, None)
+      MetaCommit.doMetaCommit(metaInfo2, false, CommitOptions(None, None))
 
       partitionInfoArr = MetaVersion.getAllPartitionInfo(tableInfo.table_id)
       assert(
@@ -283,9 +283,10 @@ class MetaCommitSuite extends MetaCommitSuiteBase {
         newPartitionInfoArr2,
         CommitType("simple"))
 
-      MetaCommit.doMetaCommit(metaInfo1, false, None)
+      MetaCommit.doMetaCommit(metaInfo1, false, CommitOptions(None, None))
 
-      val e = intercept[MetaRerunException](MetaCommit.doMetaCommit(metaInfo2, false, None))
+      val e = intercept[MetaRerunException](
+        MetaCommit.doMetaCommit(metaInfo2, false, CommitOptions(None, None)))
       assert(e.getMessage.contains("Another job added file"))
 
     })
@@ -310,9 +311,10 @@ class MetaCommitSuite extends MetaCommitSuiteBase {
         newPartitionInfoArr2,
         CommitType("compaction"))
 
-      MetaCommit.doMetaCommit(metaInfo1, false, None)
+      MetaCommit.doMetaCommit(metaInfo1, false, CommitOptions(None, None))
 
-      val e = intercept[MetaRerunException](MetaCommit.doMetaCommit(metaInfo2, false, None))
+      val e = intercept[MetaRerunException](
+        MetaCommit.doMetaCommit(metaInfo2, false, CommitOptions(None, None)))
       assert(e.getMessage.contains("deleted by another job during write_version="))
 
     })
@@ -348,7 +350,7 @@ class MetaCommitSuite extends MetaCommitSuiteBase {
 
 
       MetaCommit.takeSchemaLock(metaInfo1)
-      MetaCommit.doMetaCommit(metaInfo2, true, None)
+      MetaCommit.doMetaCommit(metaInfo2, true, CommitOptions(None, None))
       val currentTableInfo = MetaVersion.getTableInfo(tableName)
       assert(currentTableInfo.schema_version == tableInfo.schema_version + 1 &&
         currentTableInfo.table_schema.equals(newSchema2))
@@ -365,7 +367,7 @@ class MetaCommitSuite extends MetaCommitSuiteBase {
         CommitType("delta"))
 
       val e = intercept[AnalysisException] {
-        MetaCommit.doMetaCommit(metaInfo3, true, None)
+        MetaCommit.doMetaCommit(metaInfo3, true, CommitOptions(None, None))
       }
 
       assert(e.getMessage().contains("Schema has been changed for table"))

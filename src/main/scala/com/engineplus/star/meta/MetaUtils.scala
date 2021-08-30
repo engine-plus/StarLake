@@ -33,6 +33,7 @@ import scala.util.control.NonFatal
 object MetaUtils extends Logging {
 
   private def spark: SparkSession = SparkSession.active
+
   def sqlConf: SQLConf = spark.sessionState.conf
 
   lazy val DEFAULT_RANGE_PARTITION_VALUE: String = "-5"
@@ -149,7 +150,7 @@ object MetaUtils extends Logging {
     makeQualifiedTablePath(tablePath)
   }
 
-  def makeQualifiedTablePath(tablePath: String): Path = {
+  private def makeQualifiedTablePath(tablePath: String): Path = {
     val normalPath = tablePath.replace("s3://", "s3a://")
     val path = new Path(normalPath)
     path.getFileSystem(spark.sessionState.newHadoopConf()).makeQualified(path)
@@ -187,7 +188,7 @@ object MetaUtils extends Logging {
   /** get partition key Map from string */
   def getPartitionMapFromKey(range_value: String): Map[String, String] = {
     var partition_values = Map.empty[String, String]
-    if (!range_value.equals(DEFAULT_RANGE_PARTITION_VALUE)){
+    if (!range_value.equals(DEFAULT_RANGE_PARTITION_VALUE)) {
       val range_list = range_value.split(",")
       for (range <- range_list) {
         val parts = range.split("=")
@@ -196,6 +197,21 @@ object MetaUtils extends Logging {
     }
     partition_values
   }
+
+  /** format char ' in sql text so it can write to cassandra */
+  def formatSqlTextToCassandra(sqlText: String): String = {
+    sqlText.replace("'", "_star_meta_quote_")
+  }
+
+  /** format char \' in sql text read from cassandra, so it can be used in spark */
+  def formatSqlTextFromCassandra(sqlText: String): String = {
+    if (sqlText == null) {
+      ""
+    } else {
+      sqlText.replace("_star_meta_quote_", "'")
+    }
+  }
+
 
 }
 

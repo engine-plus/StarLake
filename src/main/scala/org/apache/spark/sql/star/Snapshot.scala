@@ -57,7 +57,8 @@ class Snapshot(table_info: TableInfo,
           PartitionFilterInfo(
             part.range_id,
             part.range_value,
-            MetaUtils.getPartitionMapFromKey(part.range_value)))
+            MetaUtils.getPartitionMapFromKey(part.range_value),
+            part.read_version))
     }
     spark.sparkContext.parallelize(allPartitionFilterInfo).toDF()
   }.persist()

@@ -16,7 +16,7 @@
 
 package org.apache.spark.sql.star.catalog
 
-import com.engineplus.star.meta.{MetaCommit, MetaUtils}
+import com.engineplus.star.meta.{MaterialView, MetaCommit}
 import org.apache.spark.internal.Logging
 import org.apache.spark.sql.SparkSession
 import org.apache.spark.sql.catalyst.expressions
@@ -27,13 +27,15 @@ import org.apache.spark.sql.execution.datasources.v2.FileScanBuilder
 import org.apache.spark.sql.execution.datasources.v2.merge.{MultiPartitionMergeBucketScan, MultiPartitionMergeScan, OnePartitionMergeBucketScan}
 import org.apache.spark.sql.execution.datasources.v2.parquet.{BucketParquetScan, ParquetScan}
 import org.apache.spark.sql.sources.Filter
-import org.apache.spark.sql.star.{StarLakeFileIndexV2, StarLakeUtils}
+import org.apache.spark.sql.star.exception.StarLakeErrors
 import org.apache.spark.sql.star.sources.{StarLakeSQLConf, StarLakeSourceUtils}
-import org.apache.spark.sql.star.utils.TableInfo
+import org.apache.spark.sql.star.utils.{RelationTable, TableInfo}
+import org.apache.spark.sql.star.{StarLakeFileIndexV2, StarLakeUtils}
 import org.apache.spark.sql.types.StructType
 import org.apache.spark.sql.util.CaseInsensitiveStringMap
 
 import scala.collection.JavaConverters._
+import scala.collection.mutable.ArrayBuffer
 
 
 case class StarLakeScanBuilder(sparkSession: SparkSession,
@@ -95,7 +97,27 @@ case class StarLakeScanBuilder(sparkSession: SparkSession,
 
   override def build(): Scan = {
     //check and redo commit before read
-    MetaCommit.checkAndRedoCommit(tableInfo.table_id)
+    MetaCommit.checkAndRedoCommit(fileIndex.snapshotManagement.snapshot)
+
+    //if table is a material view, quickly failed if data is stale
+    if (tableInfo.is_material_view
+      && !sparkSession.sessionState.conf.getConf(StarLakeSQLConf.ALLOW_STALE_MATERIAL_VIEW)) {
+      val materialInfo = MaterialView.getMaterialViewInfo(tableInfo.short_table_name.get)
+      assert(materialInfo.isDefined)
+
+      val data = sparkSession.sql(materialInfo.get.sqlText)
+      val currentRelationTableVersion = new ArrayBuffer[RelationTable]()
+      StarLakeUtils.parseRelationTableInfo(data.queryExecution.executedPlan, currentRelationTableVersion)
+      val currentRelationTableVersionMap = currentRelationTableVersion.map(m => (m.tableName, m)).toMap
+      val isConsistent = materialInfo.get.relationTables.forall(f => {
+        val currentVersion = currentRelationTableVersionMap(f.tableName)
+        f.toString.equals(currentVersion.toString)
+      })
+
+      if (!isConsistent) {
+        throw StarLakeErrors.materialViewHasStaleDataException(tableInfo.short_table_name.get)
+      }
+    }
 
     val fileInfo = fileIndex.getFileInfo(Seq(parseFilter())).groupBy(_.range_partitions)
     val onlyOnePartition = fileInfo.size <= 1

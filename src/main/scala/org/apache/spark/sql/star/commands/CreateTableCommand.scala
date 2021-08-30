@@ -118,7 +118,7 @@ case class CreateTableCommand(table: CatalogTable,
 
     val shortTableName = table.identifier.table
     if (MetaVersion.isShortTableNameExists(shortTableName)._1){
-      throw StarLakeErrors.tableAlreadyExistsException(shortTableName)
+      throw StarLakeErrors.tableExistsException(shortTableName)
     }else{
       tc.setShortTableName(shortTableName)
     }
