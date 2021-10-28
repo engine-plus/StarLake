@@ -21,9 +21,9 @@ import org.apache.hadoop.fs.Path
 import org.apache.spark.sql.catalyst.TableIdentifier
 import org.apache.spark.sql.catalyst.analysis.EliminateSubqueryAliases
 import org.apache.spark.sql.catalyst.catalog.CatalogTable
-import org.apache.spark.sql.catalyst.expressions.{Expression, PredicateHelper, SubqueryExpression}
+import org.apache.spark.sql.catalyst.expressions.{Alias, AttributeReference, Expression, PredicateHelper, SubqueryExpression}
 import org.apache.spark.sql.catalyst.planning.PhysicalOperation
-import org.apache.spark.sql.catalyst.plans.logical.LogicalPlan
+import org.apache.spark.sql.catalyst.plans.logical.{Aggregate, LogicalPlan, Project}
 import org.apache.spark.sql.execution.SparkPlan
 import org.apache.spark.sql.execution.datasources.LogicalRelation
 import org.apache.spark.sql.execution.datasources.v2.merge.MergeDeltaParquetScan
@@ -44,6 +44,15 @@ object StarLakeUtils extends PredicateHelper {
 
   val MERGE_OP_COL = "_star_merge_col_name_"
   val MERGE_OP = "_star_merge_op_"
+
+  lazy val USE_MATERIAL_REWRITE = "_star_use_material_rewrite_"
+
+
+  def executeWithoutQueryRewrite[T](sparkSession: SparkSession)(f: => T): Unit ={
+    sparkSession.conf.set(USE_MATERIAL_REWRITE, "false")
+    f
+    sparkSession.conf.set(USE_MATERIAL_REWRITE, "true")
+  }
 
   def getClass(className: String): Class[_] = {
     Class.forName(className, true, Utils.getContextOrSparkClassLoader)
@@ -175,6 +184,11 @@ object StarLakeUtils extends PredicateHelper {
   }
 
 
+  /**
+    * parse relation table info for material view from spark plan
+    * @param plan spark plan
+    * @param array result array buffer
+    */
   def parseRelationTableInfo(plan: SparkPlan, array: ArrayBuffer[RelationTable]): Unit = {
     plan match {
       case BatchScanExec(_, scan) =>
@@ -192,6 +206,10 @@ object StarLakeUtils extends PredicateHelper {
         val partitionInfo = PartitionFilter.partitionsForScan(snapshot, filters)
           .map(m => (m.range_id, m.read_version.toString))
 
+        if(snapshot.getTableInfo.is_material_view){
+          throw StarLakeErrors.materialViewBuildWithAnotherMaterialViewException()
+        }
+
         array += RelationTable(tableName, snapshot.getTableInfo.table_id, partitionInfo)
 
       case p: SparkPlan if p.children.nonEmpty => p.children.foreach(parseRelationTableInfo(_, array))
@@ -199,6 +217,45 @@ object StarLakeUtils extends PredicateHelper {
       case _ => throw StarLakeErrors.materialViewBuildWithNonStarTableException()
     }
   }
+
+
+//  /**
+//    * parse material view/table info to help analysis
+//    * @param plan
+//    */
+//  def parseMaterialTableInfo(plan: LogicalPlan, constructInfo: ConstructQueryInfo): Unit ={
+//    //add output info
+////    constructInfo.addOutputInfo(plan.output)
+//    plan match {
+//      case aggregate: Aggregate =>
+//        //add aggregate info (group columns)
+//        aggregate.groupingExpressions.foreach(exp =>
+//          exp match {
+//            case att: AttributeReference => constructInfo.addAggregateInfo(att)
+//            case as: Alias =>
+//              //add output info (Alias can only exists in output)
+//              as.qualifier
+//              exp.references
+//              constructInfo.addAggregateInfo(as.child.asInstanceOf[AttributeReference])
+//
+//            case _ =>
+//          })
+//        //add output info
+//        aggregate.aggregateExpressions.foreach(expression =>
+//          expression.references)
+//
+////      case project: Project =>
+////        project.projectList.foreach(p =>
+////        p match {
+////          case a @ AttributeReference =>
+////        })
+//
+//    }
+//  }
+
+
+//  def parseMaterialTableInfo(plan: LogicalPlan, constructInfo: ConstructQueryInfo): Unit =
+
 
 }
 

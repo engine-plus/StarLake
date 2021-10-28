@@ -69,7 +69,7 @@ abstract class MergeDeltaParquetScan(sparkSession: SparkSession,
       f.copy(write_version = 0)
     } else f)
 
-  /** if delta files are too many, we will execute compaction first */
+  /** if there are too many delta files, we will execute compaction first */
   private def compactAndReturnNewFileIndex(oriFileIndex: StarLakeFileIndexV2): StarLakeFileIndexV2 = {
     val files = oriFileIndex.getFileInfo(partitionFilters)
       .map(f => if (f.is_base_file) {

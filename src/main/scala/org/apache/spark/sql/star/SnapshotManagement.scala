@@ -207,7 +207,6 @@ class SnapshotManagement(path: String) extends Logging {
 
 }
 
-case class GroupFiles(key: (Map[String, String], Int), dataFiles: Seq[DataFileInfo])
 
 object SnapshotManagement {
 

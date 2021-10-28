@@ -155,6 +155,7 @@ object MetaTableManage {
            |  relation_tables text,
            |  auto_update boolean,
            |  is_creating_view boolean,
+           |  view_info text,
            |	PRIMARY KEY ((commit_type,table_id), commit_id, range_id, file_path)
            |) WITH bloom_filter_fp_chance = 0.01
            |    AND caching = {'keys': 'ALL', 'rows_per_partition': 'ALL'}
@@ -237,7 +238,7 @@ object MetaTableManage {
            |    AND caching = {'keys': 'ALL', 'rows_per_partition': 'ALL'}
            |    AND compaction = {'class': 'LeveledCompactionStrategy', 'sstable_size_in_mb': 32}
            |    AND gc_grace_seconds = 3600
-           |    AND comment = 'material view info'
+           |    AND comment = 'matching short table name'
         """.stripMargin)
     })
   }
@@ -254,6 +255,7 @@ object MetaTableManage {
            |  relation_tables text,
            |  sql_text text,
            |  auto_update boolean,
+           |  view_info text,
            |	PRIMARY KEY (view_name)
            |) WITH bloom_filter_fp_chance = 0.01
            |    AND caching = {'keys': 'ALL', 'rows_per_partition': 'ALL'}

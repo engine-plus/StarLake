@@ -22,7 +22,7 @@ import com.engineplus.star.meta.Redo._
 import com.engineplus.star.meta.RollBack._
 import com.engineplus.star.meta.UndoLog._
 import org.apache.spark.internal.Logging
-import org.apache.spark.sql.star.Snapshot
+import org.apache.spark.sql.star.{ConstructQueryInfo, Snapshot}
 import org.apache.spark.sql.star.commands.{DropPartitionCommand, DropTableCommand}
 import org.apache.spark.sql.star.exception._
 import org.apache.spark.sql.star.utils._
@@ -190,7 +190,8 @@ object MetaCommit extends Logging {
         sql_text = materialInfo.sqlText,
         relation_tables = materialInfo.relationTables.map(_.toString).mkString(","),
         auto_update = materialInfo.autoUpdate,
-        is_creating_view = materialInfo.isCreatingView)
+        is_creating_view = materialInfo.isCreatingView,
+        view_info = ConstructQueryInfo.buildJson(materialInfo.info))
 
       //lock material view table to prevent changes by other commit
       lockMaterialViewName(
@@ -231,6 +232,12 @@ object MetaCommit extends Logging {
         new_meta_info.table_info.short_table_name.get
       }
       if (materialInfo.isCreatingView) {
+        //queryInfo may very big and exceed 64kb limit, so try to split it to some fragment if value is too long
+        val view_info_index = getUndoLogInfo(
+          UndoLogType.Material.toString,
+          new_meta_info.table_info.table_id,
+          new_meta_info.commit_id)
+          .head.view_info
         //add material view
         MaterialView.addMaterialView(
           shortTableName,
@@ -238,7 +245,8 @@ object MetaCommit extends Logging {
           new_meta_info.table_info.table_id,
           materialInfo.relationTables.map(_.toString).mkString(","),
           materialInfo.sqlText,
-          materialInfo.autoUpdate)
+          materialInfo.autoUpdate,
+          view_info_index)
         //unlock material view
         unlockMaterialViewName(new_meta_info.commit_id, shortTableName)
 

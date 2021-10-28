@@ -59,7 +59,7 @@ object StarLakeSQLConf {
 
   val CLEANUP_PARALLELISM: ConfigEntry[Int] =
     buildConf("cleanup.parallelism")
-      .doc("The number of parallelism to list a collection of path recursively when cleanup, default is 50.")
+      .doc("The number of parallelism to list a collection of path recursively when cleanup, default is 200.")
       .intConf
       .createWithDefault(200)
 
@@ -69,12 +69,13 @@ object StarLakeSQLConf {
       .booleanConf
       .createWithDefault(true)
 
-  //默认的meta数据库名
+  //default meta database name
   val META_DATABASE_NAME: ConfigEntry[String] =
     buildConf("meta.database.name")
       .doc(
         """
           |Default database of meta tables in Cassandra.
+          |User should not change it unless you know what you are going to do.
         """.stripMargin)
       .stringConf
       .createWithDefault("star_meta")
@@ -347,5 +348,15 @@ object StarLakeSQLConf {
         """.stripMargin)
       .booleanConf
       .createWithDefault(false)
+
+  val MATERIAL_QUERY_REWRITE_ENABLE: ConfigEntry[Boolean] =
+    buildConf("material.query.rewrite.enable")
+      .doc(
+        """
+          |If true, material view can be used to rewrite query plan.
+        """.stripMargin)
+      .booleanConf
+      .createWithDefault(true)
+
 
 }

@@ -16,7 +16,10 @@
 
 package com.engineplus.star.meta
 
+import org.apache.spark.sql.star.ConstructQueryInfo
 import org.apache.spark.sql.star.utils.{MaterialViewInfo, RelationTable}
+
+import scala.util.matching.Regex
 
 object MaterialView {
   private val cassandraConnector = MetaUtils.cassandraConnector
@@ -46,14 +49,16 @@ object MaterialView {
                       table_id: String,
                       relation_tables: String,
                       sql_text: String,
-                      auto_update: Boolean): Unit = {
+                      auto_update: Boolean,
+                      view_info_index: String): Unit = {
     cassandraConnector.withSessionDo(session => {
       val format_sql_text = MetaUtils.formatSqlTextToCassandra(sql_text)
       session.execute(
         s"""
            |insert into $database.material_view
-           |(view_name,table_name,table_id,relation_tables,sql_text,auto_update)
-           |values ('$view_name', '$table_name', '$table_id', '$relation_tables', '$format_sql_text', $auto_update)
+           |(view_name,table_name,table_id,relation_tables,sql_text,auto_update,view_info)
+           |values ('$view_name', '$table_name', '$table_id', '$relation_tables', '$format_sql_text',
+           |$auto_update, '$view_info_index')
         """.stripMargin)
     })
   }
@@ -85,14 +90,31 @@ object MaterialView {
     cassandraConnector.withSessionDo(session => {
       val res = session.execute(
         s"""
-           |select sql_text,relation_tables,auto_update from $database.material_view
+           |select table_id,sql_text,relation_tables,auto_update,view_info from $database.material_view
            |where view_name='$view_name'
         """.stripMargin).one()
       try {
+        val table_id = res.getString("table_id")
+        val view_info_index = res.getString("view_info")
+
+        //if viewInfo is some fragment index, we should get true value and joint them
+        val parttern = new Regex("\\w{8}(-\\w{4}){3}-\\w{12}")
+        val view_info =
+          if (parttern.findFirstIn(view_info_index).isDefined
+            && !view_info_index.contains("{")) {
+            FragmentValue.getEntireValue(table_id, view_info_index)
+          } else {
+            view_info_index
+          }
+
+
         Some(MaterialViewInfo(
+          view_name,
           MetaUtils.formatSqlTextFromCassandra(res.getString("sql_text")),
           res.getString("relation_tables").split(",").map(m => RelationTable.build(m)),
-          res.getBool("auto_update")))
+          res.getBool("auto_update"),
+          false,
+          ConstructQueryInfo.buildInfo(view_info)))
       } catch {
         case _: NullPointerException => return None
         case e: Exception => throw e

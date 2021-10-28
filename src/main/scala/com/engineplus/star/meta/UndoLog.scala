@@ -106,7 +106,15 @@ object UndoLog extends Logging {
                          sql_text: String,
                          relation_tables: String,
                          auto_update: Boolean,
-                         is_creating_view: Boolean): Unit = {
+                         is_creating_view: Boolean,
+                         view_info: String): Unit = {
+    //queryInfo may very big and exceed 64kb limit, so try to split it to some fragment if value is too long
+    val view_info_index = if (view_info.length > max_size_per_value) {
+      FragmentValue.splitLargeValueIntoFragmentValues(table_id, view_info)
+    } else {
+      view_info
+    }
+
     insertUndoLog(
       commit_type = UndoLogType.Material.toString,
       table_id = table_id,
@@ -116,7 +124,8 @@ object UndoLog extends Logging {
       sql_text = sql_text,
       relation_tables = relation_tables,
       auto_update = auto_update,
-      is_creating_view = is_creating_view)
+      is_creating_view = is_creating_view,
+      view_info = view_info_index)
   }
 
   def addFileUndoLog(table_name: String,
@@ -237,7 +246,8 @@ object UndoLog extends Logging {
                     sql_text: String = default_value,
                     relation_tables: String = default_value,
                     auto_update: Boolean = false,
-                    is_creating_view: Boolean = false): Unit = {
+                    is_creating_view: Boolean = false,
+                    view_info: String = default_value): Unit = {
     cassandraConnector.withSessionDo(session => {
       val format_sql_text = MetaUtils.formatSqlTextToCassandra(sql_text)
       session.execute(
@@ -245,11 +255,11 @@ object UndoLog extends Logging {
            |insert into $database.undo_log
            |(commit_type,table_id,commit_id,range_id,file_path,table_name,range_value,tag,write_version,timestamp,
            |size,modification_time,table_schema,setting,file_exist_cols,delta_file_num,be_compacted,is_base_file,
-           |short_table_name,sql_text,relation_tables,auto_update,is_creating_view)
+           |short_table_name,sql_text,relation_tables,auto_update,is_creating_view,view_info)
            |values ('$commit_type','$table_id','$commit_id','$range_id','$file_path','$table_name','$range_value',$tag,
            |$write_version,$timestamp,$size,$modification_time,'$table_schema',$setting,'$file_exist_cols',
            |$delta_file_num,$be_compacted,$is_base_file,'$short_table_name','$format_sql_text','$relation_tables',
-           |$auto_update,$is_creating_view)
+           |$auto_update,$is_creating_view,'$view_info')
       """.stripMargin)
     })
 
@@ -401,7 +411,7 @@ object UndoLog extends Logging {
         s"""
            |select table_name,range_id,range_value,file_path,tag,write_version,timestamp,size,modification_time,
            |table_schema,setting,file_exist_cols,delta_file_num,be_compacted,is_base_file,query_id,batch_id,
-           |short_table_name,sql_text,relation_tables,auto_update,is_creating_view
+           |short_table_name,sql_text,relation_tables,auto_update,is_creating_view,view_info
            |from $database.undo_log where commit_type='$commit_type' and table_id='$table_id'
            |and commit_id='$commit_id'
       """.stripMargin).getUninterruptibly()
@@ -435,7 +445,8 @@ object UndoLog extends Logging {
           MetaUtils.formatSqlTextFromCassandra(re.getString("sql_text")),
           re.getString("relation_tables"),
           re.getBool("auto_update"),
-          re.getBool("is_creating_view"))
+          re.getBool("is_creating_view"),
+          re.getString("view_info"))
       }
       arr_buf.toArray
     })
@@ -461,7 +472,8 @@ object UndoLog extends Logging {
         s"""
            |select commit_id,range_id,file_path,table_name,range_value,tag,write_version,timestamp,size,
            |modification_time,table_schema,setting,file_exist_cols,delta_file_num,be_compacted,
-           |is_base_file,query_id,batch_id,short_table_name,sql_text,relation_tables,auto_update,is_creating_view
+           |is_base_file,query_id,batch_id,short_table_name,sql_text,relation_tables,auto_update,
+           |is_creating_view,view_info
            |from $database.undo_log where commit_type='$commit_type' and table_id='$table_id'
            |and timestamp<$limit_timestamp allow filtering
       """.stripMargin).getUninterruptibly()
@@ -495,7 +507,8 @@ object UndoLog extends Logging {
           MetaUtils.formatSqlTextFromCassandra(re.getString("sql_text")),
           re.getString("relation_tables"),
           re.getBool("auto_update"),
-          re.getBool("is_creating_view"))
+          re.getBool("is_creating_view"),
+          re.getString("view_info"))
       }
       arr_buf.toArray
     })

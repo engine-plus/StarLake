@@ -36,6 +36,13 @@ object MetaUtils extends Logging {
 
   def sqlConf: SQLConf = spark.sessionState.conf
 
+  lazy val STAR_META_QUOTE = "_star_meta_quote_"
+  lazy val STAR_LAKE_SEP_01 = "_star_lake_sep_01_"
+  lazy val STAR_LAKE_SEP_02 = "_star_lake_sep_02_"
+  lazy val STAR_LAKE_SEP_03 = "_star_lake_sep_03_"
+  lazy val STAR_LAKE_SEP_04 = "_star_lake_sep_04_"
+  lazy val STAR_LAKE_SEP_05 = "_star_lake_sep_05_"
+
   lazy val DEFAULT_RANGE_PARTITION_VALUE: String = "-5"
   lazy val UNDO_LOG_DEFAULT_VALUE: String = "-5"
   lazy val UNDO_LOG_DEFAULT_SETTING: String = "{'key1':'value1'}"
@@ -200,7 +207,7 @@ object MetaUtils extends Logging {
 
   /** format char ' in sql text so it can write to cassandra */
   def formatSqlTextToCassandra(sqlText: String): String = {
-    sqlText.replace("'", "_star_meta_quote_")
+    sqlText.replace("'", STAR_META_QUOTE)
   }
 
   /** format char \' in sql text read from cassandra, so it can be used in spark */
@@ -208,7 +215,7 @@ object MetaUtils extends Logging {
     if (sqlText == null) {
       ""
     } else {
-      sqlText.replace("_star_meta_quote_", "'")
+      sqlText.replace(STAR_META_QUOTE, "'")
     }
   }
 

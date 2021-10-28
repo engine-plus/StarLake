@@ -102,20 +102,24 @@ case class StarLakeScanBuilder(sparkSession: SparkSession,
     //if table is a material view, quickly failed if data is stale
     if (tableInfo.is_material_view
       && !sparkSession.sessionState.conf.getConf(StarLakeSQLConf.ALLOW_STALE_MATERIAL_VIEW)) {
-      val materialInfo = MaterialView.getMaterialViewInfo(tableInfo.short_table_name.get)
-      assert(materialInfo.isDefined)
 
-      val data = sparkSession.sql(materialInfo.get.sqlText)
-      val currentRelationTableVersion = new ArrayBuffer[RelationTable]()
-      StarLakeUtils.parseRelationTableInfo(data.queryExecution.executedPlan, currentRelationTableVersion)
-      val currentRelationTableVersionMap = currentRelationTableVersion.map(m => (m.tableName, m)).toMap
-      val isConsistent = materialInfo.get.relationTables.forall(f => {
-        val currentVersion = currentRelationTableVersionMap(f.tableName)
-        f.toString.equals(currentVersion.toString)
-      })
+      //forbid using material rewrite this plan
+      StarLakeUtils.executeWithoutQueryRewrite(sparkSession){
+        val materialInfo = MaterialView.getMaterialViewInfo(tableInfo.short_table_name.get)
+        assert(materialInfo.isDefined)
 
-      if (!isConsistent) {
-        throw StarLakeErrors.materialViewHasStaleDataException(tableInfo.short_table_name.get)
+        val data = sparkSession.sql(materialInfo.get.sqlText)
+        val currentRelationTableVersion = new ArrayBuffer[RelationTable]()
+        StarLakeUtils.parseRelationTableInfo(data.queryExecution.executedPlan, currentRelationTableVersion)
+        val currentRelationTableVersionMap = currentRelationTableVersion.map(m => (m.tableName, m)).toMap
+        val isConsistent = materialInfo.get.relationTables.forall(f => {
+          val currentVersion = currentRelationTableVersionMap(f.tableName)
+          f.toString.equals(currentVersion.toString)
+        })
+
+        if (!isConsistent) {
+          throw StarLakeErrors.materialViewHasStaleDataException(tableInfo.short_table_name.get)
+        }
       }
     }
 

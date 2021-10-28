@@ -157,6 +157,7 @@ trait TransactionalWrite {
 
     val committer = getCommitter(outputPath)
 
+    //add not null check to primary key
     val invariants = Invariants.getFromSchema(tableInfo.schema, spark)
 
     SQLExecution.withNewExecutionId(queryExecution) {

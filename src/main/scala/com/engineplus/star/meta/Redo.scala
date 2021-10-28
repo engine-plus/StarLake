@@ -139,7 +139,8 @@ object Redo extends Logging {
           table_id,
           info.relation_tables,
           info.sql_text,
-          info.auto_update)
+          info.auto_update,
+          info.view_info)
         //unlock material view
         unlockMaterialViewName(commit_id, info.short_table_name)
 

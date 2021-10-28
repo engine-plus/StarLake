@@ -392,10 +392,10 @@ trait Transaction extends TransactionalWrite with Logging {
   }
 
 
-  /** Mark the entire table as tainted by this transaction. */
-  def readWholeTable(): Unit = {
-    readPredicates += Literal(true)
-  }
+//  /** Mark the entire table as tainted by this transaction. */
+//  def readWholeTable(): Unit = {
+//    readPredicates += Literal(true)
+//  }
 
 
 }

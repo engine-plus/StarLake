@@ -629,11 +629,38 @@ object StarLakeErrors {
       s"""Material view can only build with star table, but non-star table was found.""")
   }
 
+  def materialViewBuildWithAnotherMaterialViewException(): Throwable = {
+    new AnalysisException(
+      s"""Material view can't build with another material view.""")
+  }
+
   def materialViewHasStaleDataException(table: String): Throwable = {
     new AnalysisException(
       s"""Data of material view `$table` is staled, please update this view before read,
          |or set spark.engineplus.star.allow.stale.materialView to true if you can accept staled data.""".stripMargin)
   }
+
+  def unsupportedDataTypeInMaterialRewriteQueryException(dataType: DataType): Throwable = {
+    new AnalysisException(
+      s"""DataType ${dataType.simpleString} is not supported in query rewrite,
+         |if you want to use it, you can disable query rewrite by setting
+         |spark.engineplus.star.material.query.rewrite.enable to false.
+       """.stripMargin)
+  }
+
+  def unsupportedLogicalPlanWhileRewriteQueryException(plan: String): Throwable = {
+    new AnalysisException(
+      s"""Found unsupported logical plan while rewrite Query.
+          Unsupported plan:
+          $plan
+       """.stripMargin)
+  }
+
+  def canNotCreateMaterialViewOrRewriteQueryException(reason: String): Throwable = {
+    new AnalysisException(
+      s"""Can't create material view or rewrite query plan because: $reason.""")
+  }
+
 
 
 }

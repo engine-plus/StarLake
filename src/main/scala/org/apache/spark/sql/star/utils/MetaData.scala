@@ -20,6 +20,7 @@ import com.engineplus.star.meta.{CommitState, CommitType, MetaUtils}
 import com.fasterxml.jackson.annotation.JsonIgnore
 import org.apache.hadoop.fs.Path
 import org.apache.spark.sql.execution.datasources.BucketingUtils
+import org.apache.spark.sql.star.QueryInfo
 import org.apache.spark.sql.types.{DataType, StructType}
 
 case class MetaInfo(table_info: TableInfo,
@@ -194,7 +195,8 @@ case class undoLogInfo(commit_type: String,
                        sql_text: String,
                        relation_tables: String,
                        auto_update: Boolean,
-                       is_creating_view: Boolean)
+                       is_creating_view: Boolean,
+                       view_info: String)
 
 case class Format(provider: String = "parquet",
                   options: Map[String, String] = Map.empty)
@@ -209,10 +211,12 @@ case class CommitOptions(shortTableName: Option[String],
   * @param sqlText        sql in text format to create material view
   * @param relationTables relation tables, the value is a format "table_id->table_name,table1->oss://test/path"
   */
-case class MaterialViewInfo(sqlText: String,
+case class MaterialViewInfo(viewName: String,
+                            sqlText: String,
                             relationTables: Seq[RelationTable],
                             autoUpdate: Boolean,
-                            isCreatingView: Boolean = false)
+                            isCreatingView: Boolean = false,
+                            info: QueryInfo)
 
 case class RelationTable(tableName: String,
                          tableId: String,

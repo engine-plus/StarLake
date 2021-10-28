@@ -89,7 +89,7 @@ class StarSparkSessionExtension extends (SparkSessionExtensions => Unit) {
       StarLakeUnsupportedOperationsCheck(session)
     }
 
-    extensions.injectCheckRule{session =>
+    extensions.injectCheckRule { session =>
       NonMergeOperatorUDFCheck(session)
     }
 
@@ -105,6 +105,10 @@ class StarSparkSessionExtension extends (SparkSessionExtensions => Unit) {
 
     extensions.injectPostHocResolutionRule { session =>
       StarLakePostHocAnalysis(session)
+    }
+
+    extensions.injectResolutionRule { session =>
+      RewriteQueryByMaterialView(session)
     }
 
     extensions.injectPlannerStrategy { session =>

@@ -20,9 +20,9 @@ import org.apache.spark.internal.Logging
 import org.apache.spark.sql.execution.SparkPlan
 import org.apache.spark.sql.star.exception.{MetadataMismatchErrorBuilder, StarLakeErrors}
 import org.apache.spark.sql.star.utils.{MaterialViewInfo, PartitionUtils, RelationTable, TableInfo}
-import org.apache.spark.sql.star.{StarLakeUtils, TransactionCommit}
+import org.apache.spark.sql.star.{ConstructQueryInfo, MaterialViewUtils, StarLakeUtils, TransactionCommit}
 import org.apache.spark.sql.types.{StructField, StructType}
-import org.apache.spark.sql.{Dataset, SparkSession}
+import org.apache.spark.sql.{DataFrame, Dataset, SparkSession}
 
 import scala.collection.mutable.ArrayBuffer
 
@@ -73,7 +73,7 @@ trait ImplicitMetadataOperation extends Logging {
       data.schema,
       configuration,
       isOverwriteMode,
-      Some(data.queryExecution.executedPlan)
+      Some(data)
     )
   }
 
@@ -82,7 +82,7 @@ trait ImplicitMetadataOperation extends Logging {
                                      schema: StructType,
                                      configuration: Map[String, String],
                                      isOverwriteMode: Boolean,
-                                     plan: Option[SparkPlan] = None): Unit = {
+                                     data: Option[Dataset[_]] = None): Unit = {
     val table_info = tc.tableInfo
 
     /**
@@ -115,11 +115,28 @@ trait ImplicitMetadataOperation extends Logging {
           throw StarLakeErrors.tableExistsException(tc.tableInfo.table_name)
         }
         assert(materialSQLText.nonEmpty)
-        assert(plan.isDefined)
-        val relationTables = new ArrayBuffer[RelationTable]()
-        StarLakeUtils.parseRelationTableInfo(plan.get, relationTables)
+        assert(data.isDefined)
 
-        tc.setMaterialInfo(MaterialViewInfo(materialSQLText, relationTables, materialAutoUpdate, true))
+        //parse material info from logical plan
+        val construct = new ConstructQueryInfo
+        val plan = data.get.logicalPlan
+        MaterialViewUtils.parseOutputInfo(plan, construct)
+        MaterialViewUtils.parseMaterialInfo(plan, construct, false)
+        val viewInfo = construct.buildQueryInfo()
+
+        //todo: merge it into above parse
+        //get relation table info
+        val relationTables = new ArrayBuffer[RelationTable]()
+        StarLakeUtils.parseRelationTableInfo(data.get.queryExecution.executedPlan, relationTables)
+
+        tc.setMaterialInfo(
+          MaterialViewInfo(
+            shortTableName.get,
+            materialSQLText,
+            relationTables,
+            materialAutoUpdate,
+            true,
+            viewInfo))
       }
     }
 

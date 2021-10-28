@@ -67,6 +67,7 @@ class MergeMultiFileWithOperator(filesInfo: Seq[(MergePartitionedFile, Partition
     t._1.writeVersion -> t._1.fileInfo.map(info => (fieldIndexMap(info._1), info._2)).toArray
   }).toMap
 
+  //every column has an ArrayBuffer to keep all the value index of the same primary key
   private val resultIndex = new Array[ArrayBuffer[(Int, Int)]](resultSchema.length)
   MergeUtils.intBatchIndexMerge(resultIndex)
 
