@@ -17,12 +17,12 @@
 package org.apache.spark.sql.star.schema
 
 import org.apache.spark.internal.Logging
-import org.apache.spark.sql.execution.SparkPlan
 import org.apache.spark.sql.star.exception.{MetadataMismatchErrorBuilder, StarLakeErrors}
+import org.apache.spark.sql.star.material_view.{ConstructQueryInfo, MaterialViewUtils}
 import org.apache.spark.sql.star.utils.{MaterialViewInfo, PartitionUtils, RelationTable, TableInfo}
-import org.apache.spark.sql.star.{ConstructQueryInfo, MaterialViewUtils, StarLakeUtils, TransactionCommit}
+import org.apache.spark.sql.star.{StarLakeUtils, TransactionCommit}
 import org.apache.spark.sql.types.{StructField, StructType}
-import org.apache.spark.sql.{DataFrame, Dataset, SparkSession}
+import org.apache.spark.sql.{Dataset, SparkSession}
 
 import scala.collection.mutable.ArrayBuffer
 

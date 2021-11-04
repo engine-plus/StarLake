@@ -20,7 +20,7 @@ import com.engineplus.star.meta.{CommitState, CommitType, MetaUtils}
 import com.fasterxml.jackson.annotation.JsonIgnore
 import org.apache.hadoop.fs.Path
 import org.apache.spark.sql.execution.datasources.BucketingUtils
-import org.apache.spark.sql.star.QueryInfo
+import org.apache.spark.sql.star.material_view.QueryInfo
 import org.apache.spark.sql.types.{DataType, StructType}
 
 case class MetaInfo(table_info: TableInfo,

@@ -22,7 +22,8 @@ import com.engineplus.star.meta.Redo._
 import com.engineplus.star.meta.RollBack._
 import com.engineplus.star.meta.UndoLog._
 import org.apache.spark.internal.Logging
-import org.apache.spark.sql.star.{ConstructQueryInfo, Snapshot}
+import org.apache.spark.sql.star.Snapshot
+import org.apache.spark.sql.star.material_view.ConstructQueryInfo
 import org.apache.spark.sql.star.commands.{DropPartitionCommand, DropTableCommand}
 import org.apache.spark.sql.star.exception._
 import org.apache.spark.sql.star.utils._

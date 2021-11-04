@@ -16,7 +16,7 @@
 
 package com.engineplus.star.meta
 
-import org.apache.spark.sql.star.ConstructQueryInfo
+import org.apache.spark.sql.star.material_view.ConstructQueryInfo
 import org.apache.spark.sql.star.utils.{MaterialViewInfo, RelationTable}
 
 import scala.util.matching.Regex
