@@ -29,13 +29,13 @@ class RangeInfo(dataType: DataType) {
   private var includeLower: Boolean = true
   private var includeUpper: Boolean = true
 
-  def buildDetail(): RangeDetail ={
+  def buildDetail(): RangeDetail = {
     RangeDetail(dataType, lower, upper, includeLower, includeUpper)
   }
 
   def setRangeProperties(colName: String,
                          limit: Any,
-                         rangeType: String): Unit ={
+                         rangeType: String): Unit = {
     rangeType match {
       case "GreaterThan" =>
         if (lower == null) {
@@ -158,7 +158,7 @@ object RangeInfo {
 
     info.setRangeProperties(colName, limit, rangeType)
 
-    if (!rangeInfo.contains(colName)){
+    if (!rangeInfo.contains(colName)) {
       rangeInfo.put(colName, info)
     }
 
@@ -263,41 +263,41 @@ object RangeInfo {
   //return -1 if queryRange is not in scope of viewRange
   //return 0 if queryRange is equal to viewRange
   //return 1 if queryRange is a subset of viewRange
-  def compareRangeDetail(queryRange: RangeDetail, viewRange: RangeDetail): Int ={
+  def compareRangeDetail(queryRange: RangeDetail, viewRange: RangeDetail): Int = {
     var result = 0
 
-    if (queryRange.lower == null && viewRange.lower != null){
+    if (queryRange.lower == null && viewRange.lower != null) {
       result = -1
-    }else if (viewRange.lower != null){
+    } else if (viewRange.lower != null) {
       val compare = transAndCompareRange(queryRange.lower, viewRange.lower, queryRange.dataType)
 
-      if (compare<0){
+      if (compare < 0) {
         result = -1
-      }else if (compare == 0){
-        if(queryRange.includeLower && !viewRange.includeLower){
+      } else if (compare == 0) {
+        if (queryRange.includeLower && !viewRange.includeLower) {
           result = -1
-        }else if (!queryRange.includeLower.equals(viewRange.includeLower)){
+        } else if (!queryRange.includeLower.equals(viewRange.includeLower)) {
           result = 1
         }
-      }else{
+      } else {
         result = 1
       }
     }
 
-    if (result >= 0){
+    if (result >= 0) {
       if (queryRange.upper == null && viewRange.upper != null) {
         result = -1
-      } else if (viewRange.upper != null){
+      } else if (viewRange.upper != null) {
         val compare = RangeInfo.transAndCompareRange(queryRange.upper, viewRange.upper, queryRange.dataType)
         if (compare > 0) {
           result = -1
-        }else if (compare == 0){
-          if (queryRange.includeUpper && !viewRange.includeUpper){
+        } else if (compare == 0) {
+          if (queryRange.includeUpper && !viewRange.includeUpper) {
             result = -1
-          }else if(!queryRange.includeUpper.equals(viewRange.includeUpper)){
+          } else if (!queryRange.includeUpper.equals(viewRange.includeUpper)) {
             result = 1
           }
-        }else{
+        } else {
           result = 1
         }
       }
@@ -306,7 +306,6 @@ object RangeInfo {
 
 
   }
-
 
 
 }

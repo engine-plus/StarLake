@@ -23,9 +23,9 @@ import com.engineplus.star.meta.MetaUtils
 import org.apache.spark.sql.star.material_view.ConstructQueryInfo.getFinalStringByReplace
 import org.apache.spark.sql.types.DataType
 
+import scala.collection.JavaConverters._
 import scala.collection.mutable
 import scala.collection.mutable.ArrayBuffer
-import scala.collection.JavaConverters._
 
 
 class OrInfo extends ConstructProperties {
@@ -33,7 +33,7 @@ class OrInfo extends ConstructProperties {
   private val conditionEqualInfo: ArrayBuffer[(String, String)] = new ArrayBuffer[(String, String)]()
   //condition may has nest `or` expression, like a.k=1 or (a.k=2 and (a.value>5 or a.value<0))
   private val conditionOrInfo: ArrayBuffer[OrInfo] = new ArrayBuffer[OrInfo]()
-  private val otherInfo: ArrayBuffer[String] =  new ArrayBuffer[String]()
+  private val otherInfo: ArrayBuffer[String] = new ArrayBuffer[String]()
 
   override def addRangeInfo(dataType: DataType, colName: String, limit: Any, rangeType: String): Unit = {
     RangeInfo.setRangeInfo(rangeInfo, dataType, colName, limit, rangeType)
@@ -43,7 +43,7 @@ class OrInfo extends ConstructProperties {
     conditionEqualInfo += ((left, right))
   }
 
-  override def addConditionOrInfo(orInfo: OrInfo): Unit ={
+  override def addConditionOrInfo(orInfo: OrInfo): Unit = {
     conditionOrInfo += orInfo
   }
 
@@ -53,7 +53,7 @@ class OrInfo extends ConstructProperties {
 
   override def addColumnEqualInfo(left: String, right: String): Unit = {}
 
-  def buildDetail(tables: Map[String, String], asInfo: Map[String, String]): OrDetail ={
+  def buildDetail(tables: Map[String, String], asInfo: Map[String, String]): OrDetail = {
     val rangeInfoNew = rangeInfo.map(m => {
       getFinalStringByReplace(m._1, tables, asInfo) -> m._2.buildDetail()
     }).toMap
@@ -78,24 +78,22 @@ class OrInfo extends ConstructProperties {
 }
 
 
-
-
 object OrInfo {
   //return true if query's OrInfo is in scope of view's
   def inbounds(query: Seq[OrDetail], view: Seq[OrDetail]): Boolean = {
-    if(view.isEmpty){
+    if (view.isEmpty) {
       true
-    }else{
-      if (query.isEmpty){
+    } else {
+      if (query.isEmpty) {
         false
-      }else{
+      } else {
         query.forall(qod => {
           view.exists(vod => {
             //otherInfo inbounds
             var matching = vod.otherInfo.diff(qod.otherInfo).isEmpty
 
             //conditionEqualInfo inbounds
-            if(matching){
+            if (matching) {
               val diff = vod.conditionEqualInfo.map(m => m._1 + "=" + m._2).toSeq
                 .diff(qod.conditionEqualInfo.map(m => m._1 + "=" + m._2).toSeq)
               if (diff.nonEmpty) {
@@ -104,20 +102,20 @@ object OrInfo {
             }
 
             //rangeInfo of view should cover query
-            if (matching){
+            if (matching) {
               matching = vod.rangeInfo.forall(vr => {
                 var flag = true
-                if(qod.rangeInfo.contains(vr._1)){
+                if (qod.rangeInfo.contains(vr._1)) {
                   val compare = RangeInfo.compareRangeDetail(qod.rangeInfo(vr._1), vr._2)
-                  if (compare < 0){
+                  if (compare < 0) {
                     flag = false
                   }
-                }else if (qod.conditionEqualInfo.contains(vr._1)){
+                } else if (qod.conditionEqualInfo.contains(vr._1)) {
                   val value = qod.conditionEqualInfo(vr._1)
-                  if(!RangeInfo.valueInRange(value, vr._2)){
+                  if (!RangeInfo.valueInRange(value, vr._2)) {
                     flag = false
                   }
-                }else{
+                } else {
                   flag = false
                 }
                 flag
@@ -125,7 +123,7 @@ object OrInfo {
             }
 
             //orInfo
-            if (matching){
+            if (matching) {
               matching = inbounds(qod.conditionOrInfo, vod.conditionOrInfo)
             }
 
@@ -170,12 +168,10 @@ object OrInfo {
 }
 
 
-
-
 case class OrDetail(rangeInfo: Map[String, RangeDetail],
                     conditionEqualInfo: Map[String, String],
                     conditionOrInfo: Seq[OrDetail],
-                    otherInfo: Seq[String]){
+                    otherInfo: Seq[String]) {
   override def toString: String = {
     //build json
     val jsonMap = new util.HashMap[String, String]()

@@ -490,11 +490,11 @@ class StarLakeCatalog(val spark: SparkSession) extends DelegatingCatalogExtensio
   }
 
   override def dropTable(ident: Identifier): Boolean = {
-    if (isPathIdentifier(ident)){
+    if (isPathIdentifier(ident)) {
       StarTable.forPath(ident.name()).dropTable()
-    }else if (isNameIdentifier(ident)){
+    } else if (isNameIdentifier(ident)) {
       StarTable.forName(ident.name()).dropTable()
-    }else{
+    } else {
       super.dropTable(ident)
     }
   }
@@ -537,7 +537,7 @@ trait SupportsPathIdentifier extends TableCatalog {
   override def tableExists(ident: Identifier): Boolean = {
     if (isPathIdentifier(ident)) {
       StarLakeSourceUtils.isStarLakeTableExists(ident.name())
-    }else if(isNameIdentifier(ident)){
+    } else if (isNameIdentifier(ident)) {
       StarLakeSourceUtils.isStarLakeShortTableNameExists(ident.name())
     } else {
       super.tableExists(ident)

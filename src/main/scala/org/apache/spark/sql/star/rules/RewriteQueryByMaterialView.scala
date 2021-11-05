@@ -1,3 +1,19 @@
+/*
+ * Copyright [2021] [EnginePlus Team]
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
 package org.apache.spark.sql.star.rules
 
 import com.engineplus.star.meta.{MaterialView, MetaVersion}
@@ -18,8 +34,8 @@ import org.apache.spark.sql.execution.datasources.v2.DataSourceV2Relation
 import org.apache.spark.sql.star.StarLakeUtils
 import org.apache.spark.sql.star.catalog.StarLakeTableV2
 import org.apache.spark.sql.star.exception.StarLakeErrors
+import org.apache.spark.sql.star.material_view._
 import org.apache.spark.sql.star.sources.{StarLakeSQLConf, StarLakeSourceUtils}
-import org.apache.spark.sql.star.material_view.{ConstructQueryInfo, MaterialViewUtils, OrDetail, OrInfo, RangeDetail, RangeInfo}
 import org.apache.spark.sql.util.CaseInsensitiveStringMap
 
 import scala.collection.JavaConverters._
@@ -43,7 +59,6 @@ case class RewriteQueryByMaterialView(spark: SparkSession)
         MaterialViewUtils.parseOutputInfo(plan, construct)
         MaterialViewUtils.parseMaterialInfo(plan, construct, false)
         val queryInfo = construct.buildQueryInfo()
-//        val asInfo = queryInfo.columnAsInfo.filter(f => f._1.contains(".`"))
 
         val queryRelateTables = queryInfo.tableInfo.values
           .map(m => {
@@ -85,47 +100,47 @@ case class RewriteQueryByMaterialView(spark: SparkSession)
                 val allExist = outputDiff.forall(f => {
                   viewOutputColumns.exists(e => f.contains(e))
                 })
-                if (!allExist){
+                if (!allExist) {
                   canRewrite = false
                 }
               }
             }
 
             //check aggregate info matching
-            if (canRewrite){
-              if (!queryInfo.aggregateInfo.toString.equals(viewInfo.aggregateInfo.toString)){
+            if (canRewrite) {
+              if (!queryInfo.aggregateInfo.toString.equals(viewInfo.aggregateInfo.toString)) {
                 canRewrite = false
               }
             }
 
             //check join info matching
             if (canRewrite) {
-              if (!queryInfo.joinInfo.toString.equals(viewInfo.joinInfo.toString)){
+              if (!queryInfo.joinInfo.toString.equals(viewInfo.joinInfo.toString)) {
                 canRewrite = false
               }
             }
 
             //check range info matching
             //1. range info of view should all exist in query
-            if (canRewrite){
+            if (canRewrite) {
               val queryRangeConditionCols = queryInfo.rangeInfo.keySet
               val viewRangeConditionCols = viewInfo.rangeInfo.keySet
               val rangeColDiff = viewRangeConditionCols.diff(queryRangeConditionCols)
-              if(rangeColDiff.nonEmpty){
+              if (rangeColDiff.nonEmpty) {
                 val iter = rangeColDiff.iterator
-                while(canRewrite && iter.hasNext){
+                while (canRewrite && iter.hasNext) {
                   val colName = iter.next()
                   //if query has an equal condition to limit this range columns, and the value is under view's range,
                   //the view can also be used to rewrite the query, such as
                   //view: key>1 and key<10
                   //query: key=5
-                  if(queryInfo.conditionEqualInfo.contains(colName)){
+                  if (queryInfo.conditionEqualInfo.contains(colName)) {
                     val value = queryInfo.conditionEqualInfo(colName)
-                    if(!RangeInfo.valueInRange(value, viewInfo.rangeInfo(colName)) ||
-                      !conditionColumnsExists(colName, viewOutputColumns, viewInfo.columnEqualInfo)){
+                    if (!RangeInfo.valueInRange(value, viewInfo.rangeInfo(colName)) ||
+                      !conditionColumnsExists(colName, viewOutputColumns, viewInfo.columnEqualInfo)) {
                       canRewrite = false
                     }
-                  }else{
+                  } else {
                     canRewrite = false
                   }
                 }
@@ -143,61 +158,17 @@ case class RewriteQueryByMaterialView(spark: SparkSession)
                   assert(queryRange.dataType == viewRange.dataType)
 
                   val compare = RangeInfo.compareRangeDetail(queryRange, viewRange)
-                  if (compare < 0){
+                  if (compare < 0) {
                     canRewrite = false
-                  }else if (compare == 0){
+                  } else if (compare == 0) {
                     equalRangeColumns += colName
-                  }else{
+                  } else {
                     //if range not matching, view's output should contains condition columns
                     if (!conditionColumnsExists(colName, viewOutputColumns, viewInfo.columnEqualInfo)) {
                       canRewrite = false
                     }
                   }
-
-//                  if (RangeInfo.matchEqual(queryRange, viewRange)) {
-//                    equalRangeColumns += colName
-//                  } else {
-//                    //if range not matching, view's output should contains condition columns
-//                    if (!conditionColumnsExists(colName, viewOutputColumns, viewInfo.columnEqualInfo)) {
-//                      //the column which don't have range limit should exist in view's output
-//                      //(use to construct compensation predicates)
-//                      canRewrite = false
-//                    }
-//
-//                    //query's range should be a subset of view's
-//                    if (canRewrite) {
-//                      if (queryRange.lower == null && viewRange.lower != null) {
-//                        //query column has no lower limit, view should also has no lower limit,
-//                        //otherwise this view can't rewrite query
-//                        canRewrite = false
-//                      } else if (viewRange.lower != null) {
-//                        val compare = RangeInfo.transAndCompareRange(queryRange.lower, viewRange.lower, queryRange.dataType)
-//                        //view range should contains query range
-//                        if (compare < 0) {
-//                          canRewrite = false
-//                        } else if (compare == 0 && queryRange.includeLower && !viewRange.includeLower) {
-//                          canRewrite = false
-//                        }
-//                      }
-//
-//                      if (queryRange.upper == null && viewRange.upper != null) {
-//                        canRewrite = false
-//                      } else if (viewRange.upper != null) {
-//                        val compare = RangeInfo.transAndCompareRange(queryRange.upper, viewRange.upper, queryRange.dataType)
-//                        if (compare > 0) {
-//                          canRewrite = false
-//                        } else if (compare == 0 && queryRange.includeUpper && !viewRange.includeUpper) {
-//                          canRewrite = false
-//                        }
-//
-//                      }
-//
-//                    }
-//
-//                  }
-
-
-                }else if (!conditionColumnsExists(colName, viewOutputColumns, viewInfo.columnEqualInfo)) {
+                } else if (!conditionColumnsExists(colName, viewOutputColumns, viewInfo.columnEqualInfo)) {
                   //the column which don't have range limit should exists
                   //(or it's equivalence column exists) in view's output
                   canRewrite = false
@@ -207,7 +178,7 @@ case class RewriteQueryByMaterialView(spark: SparkSession)
             }
 
             //check equal condition info matching
-            if (canRewrite){
+            if (canRewrite) {
               //equal condition in view should be a subset of query
               val diff = viewInfo.conditionEqualInfo.map(m => m._1 + "=" + m._2).toSeq
                 .diff(queryInfo.conditionEqualInfo.map(m => m._1 + "=" + m._2).toSeq)
@@ -217,21 +188,21 @@ case class RewriteQueryByMaterialView(spark: SparkSession)
             }
 
             //check or condition info matching
-            if(canRewrite){
+            if (canRewrite) {
               //if there is no orInfo in query
               val queryOrInfo =
-                if (queryInfo.conditionOrInfo.isEmpty && viewInfo.conditionOrInfo.nonEmpty){
-                Seq(OrDetail(
-                  queryInfo.rangeInfo,
-                  queryInfo.conditionEqualInfo,
-                  queryInfo.conditionOrInfo,
-                  queryInfo.otherInfo))
-              }else{
-                queryInfo.conditionOrInfo
-              }
+                if (queryInfo.conditionOrInfo.isEmpty && viewInfo.conditionOrInfo.nonEmpty) {
+                  Seq(OrDetail(
+                    queryInfo.rangeInfo,
+                    queryInfo.conditionEqualInfo,
+                    queryInfo.conditionOrInfo,
+                    queryInfo.otherInfo))
+                } else {
+                  queryInfo.conditionOrInfo
+                }
               //or condition in query should be a subset of view
               val inbounds = OrInfo.inbounds(queryOrInfo, viewInfo.conditionOrInfo)
-              if (!inbounds){
+              if (!inbounds) {
                 canRewrite = false
               }
             }
@@ -265,37 +236,18 @@ case class RewriteQueryByMaterialView(spark: SparkSession)
 
           //find matching column from view output
           def matchViewOutputReference(name: String): (Boolean, Option[AttributeReference]) = {
-            //            val qualifiedName = queryInfo.outputInfo(name)
-//            val qualifiedName = ConstructQueryInfo.replaceByTableInfo(queryInfo.tableInfo, name)
-
-            //replace temp table to final star table
-//            val tmpName = ConstructQueryInfo.replaceByTableInfo(queryInfo.tableInfo, name)
-//            val formattedName = ConstructQueryInfo.replaceByColumnAsInfo(queryInfo.columnAsInfo, tmpName)
             val formattedName = ConstructQueryInfo.getFinalStringByReplace(
               name,
               queryInfo.tableInfo,
               queryInfo.columnAsInfo)
-//            val formattedName = if (queryInfo.columnAsInfo.contains(fieldWithFinalTable)){
-//              //replace alias fields to final star table fields
-//              queryInfo.columnAsInfo(fieldWithFinalTable)
-////              val formatName = fieldWithFinalTable.replace("`", "")
-////              if(queryInfo.columnAsInfo.contains(formatName)){
-////              }else{
-////                fieldWithFinalTable
-////              }
-//            }else{
-//              fieldWithFinalTable
-//            }
-
-//            val findFromView = chosenView.info.outputInfo.find(f => f._2.equals(formattedName))
             val findFromView = findColumnFromViewOutput(
               formattedName,
               chosenView.info.outputInfo,
               chosenView.info.columnEqualInfo)
-            if(findFromView.isDefined){
+            if (findFromView.isDefined) {
               val viewColumnName = findFromView.get._1.split("\\.").last
               (true, Some(outputRef(viewColumnName)))
-            }else{
+            } else {
               (false, None)
             }
           }
@@ -303,9 +255,9 @@ case class RewriteQueryByMaterialView(spark: SparkSession)
           //recursive replace attribute
           def findNewAttributeReference(expression: Expression): Expression = {
             val (find, target) = matchViewOutputReference(expression.sql)
-            if(find){
+            if (find) {
               target.get
-            }else {
+            } else {
 
               expression match {
                 //leaf expression
@@ -1017,13 +969,6 @@ case class RewriteQueryByMaterialView(spark: SparkSession)
           }
 
           def checkAndReplaceRangeCondition(expression: Expression): (Boolean, Expression) = {
-//            val formattedName = if (queryInfo.columnAsInfo.contains(columnWithFinalTable)){
-//              queryInfo.columnAsInfo(columnWithFinalTable)
-//            }else{
-//              columnWithFinalTable
-//            }
-//val tmpName = ConstructQueryInfo.replaceByTableInfo(queryInfo.tableInfo, expression.sql)
-//            val formattedName = ConstructQueryInfo.replaceByColumnAsInfo(queryInfo.columnAsInfo, tmpName)
             val formattedName = ConstructQueryInfo.getFinalStringByReplace(
               expression.sql,
               queryInfo.tableInfo,
@@ -1037,7 +982,7 @@ case class RewriteQueryByMaterialView(spark: SparkSession)
           }
 
           //parse, check and replace filter expression
-          def parseCondition(expression: Expression): Expression ={
+          def parseCondition(expression: Expression): Expression = {
             expression match {
               case c@GreaterThan(left: AttributeReference, right: Literal) =>
                 val (conditionEqual, replaceAttr) = checkAndReplaceRangeCondition(left)
@@ -1109,9 +1054,9 @@ case class RewriteQueryByMaterialView(spark: SparkSession)
                   queryInfo.tableInfo,
                   queryInfo.columnAsInfo
                 )
-                if(chosenView.info.conditionEqualInfo.contains(formattedName)){
+                if (chosenView.info.conditionEqualInfo.contains(formattedName)) {
                   Literal(true)
-                }else{
+                } else {
                   eq.copy(left = findNewAttributeReference(left))
                 }
 
@@ -1121,9 +1066,9 @@ case class RewriteQueryByMaterialView(spark: SparkSession)
                   queryInfo.tableInfo,
                   queryInfo.columnAsInfo
                 )
-                if(chosenView.info.conditionEqualInfo.contains(formattedName)){
+                if (chosenView.info.conditionEqualInfo.contains(formattedName)) {
                   Literal(true)
-                }else{
+                } else {
                   eq.copy(right = findNewAttributeReference(right))
                 }
 
@@ -1133,9 +1078,9 @@ case class RewriteQueryByMaterialView(spark: SparkSession)
                   queryInfo.tableInfo,
                   queryInfo.columnAsInfo
                 )
-                if(chosenView.info.conditionEqualInfo.contains(formattedName)){
+                if (chosenView.info.conditionEqualInfo.contains(formattedName)) {
                   Literal(true)
-                }else{
+                } else {
                   eq.copy(left = findNewAttributeReference(left))
                 }
 
@@ -1145,16 +1090,14 @@ case class RewriteQueryByMaterialView(spark: SparkSession)
                   queryInfo.tableInfo,
                   queryInfo.columnAsInfo
                 )
-                if(chosenView.info.conditionEqualInfo.contains(formattedName)){
+                if (chosenView.info.conditionEqualInfo.contains(formattedName)) {
                   Literal(true)
-                }else{
+                } else {
                   eq.copy(right = findNewAttributeReference(right))
                 }
 
 
               case other =>
-//                val condWithFinalTable = ConstructQueryInfo.replaceByTableInfo(queryInfo.tableInfo, other.sql)
-//                val cond = ConstructQueryInfo.replaceByColumnAsInfo(queryInfo.columnAsInfo, condWithFinalTable)
                 val cond = ConstructQueryInfo.getFinalStringByReplace(
                   other.sql,
                   queryInfo.tableInfo,
@@ -1170,8 +1113,6 @@ case class RewriteQueryByMaterialView(spark: SparkSession)
           }
 
 
-
-
           newPlan = plan resolveOperators {
             case prj@Project(projectList, child) =>
               val newProjectList = projectList.map(findNewAttributeReference(_).asInstanceOf[NamedExpression])
@@ -1184,14 +1125,14 @@ case class RewriteQueryByMaterialView(spark: SparkSession)
                 .reduceLeftOption(And).get
               f.copy(condition = newCondition)
 
-            case join @ Join(_, _, joinType, _, _) =>
-              if (joinType.sql.equals(Inner.sql)){
+            case join@Join(_, _, joinType, _, _) =>
+              if (joinType.sql.equals(Inner.sql)) {
                 //extract filter conditions from inner join
                 val filterConditions = new ArrayBuffer[Expression]()
                 extractFilterConditions(join, filterConditions)
                 val usefulCondition = filterConditions.map(parseCondition).reduceLeftOption(And).get
                 Filter(usefulCondition, newDataSource)
-              }else{
+              } else {
                 newDataSource
               }
 
@@ -1206,10 +1147,8 @@ case class RewriteQueryByMaterialView(spark: SparkSession)
 
 
             case dsv2: DataSourceV2Relation =>
-//              assert(queryInfo.tableInfo.size < 2)
               newDataSource
 
-            //case p: LogicalPlan => throw StarLakeErrors.unsupportedLogicalPlanWhileRewriteQueryException(p)
           }
 
 
@@ -1231,14 +1170,14 @@ case class RewriteQueryByMaterialView(spark: SparkSession)
   // (or it's equivalence column) in view output column set
   def conditionColumnsExists(colName: String,
                              viewOutput: Set[String],
-                             columnEqualInfo: Seq[Set[String]]): Boolean ={
-    if (viewOutput.contains(colName)){
+                             columnEqualInfo: Seq[Set[String]]): Boolean = {
+    if (viewOutput.contains(colName)) {
       true
-    }else{
+    } else {
       val find = columnEqualInfo.find(f => f.contains(colName))
-      if (find.isDefined){
+      if (find.isDefined) {
         find.get.exists(e => viewOutput.contains(e))
-      }else{
+      } else {
         false
       }
 
@@ -1247,30 +1186,30 @@ case class RewriteQueryByMaterialView(spark: SparkSession)
 
   def findColumnFromViewOutput(colName: String,
                                outputInfo: Map[String, String],
-                               columnEqualInfo: Seq[Set[String]]): Option[(String, String)] ={
+                               columnEqualInfo: Seq[Set[String]]): Option[(String, String)] = {
     var find = outputInfo.find(f => f._2.equals(colName))
-    if (find.isDefined){
+    if (find.isDefined) {
       find
-    }else{
+    } else {
 
       val equalCols = columnEqualInfo.find(f => f.contains(colName))
-      if (equalCols.isDefined){
+      if (equalCols.isDefined) {
         val equalColsItr = equalCols.get.iterator
         var notFound = true
 
-        while (notFound && equalColsItr.hasNext){
+        while (notFound && equalColsItr.hasNext) {
           val col = equalColsItr.next()
           find = outputInfo.find(f => f._2.equals(col))
-          if (find.isDefined){
+          if (find.isDefined) {
             notFound = false
           }
         }
-        if(notFound){
+        if (notFound) {
           None
-        }else{
+        } else {
           find
         }
-      }else{
+      } else {
         None
       }
 
@@ -1278,7 +1217,7 @@ case class RewriteQueryByMaterialView(spark: SparkSession)
   }
 
 
-  def removeAlias(condition: Expression): Expression ={
+  def removeAlias(condition: Expression): Expression = {
     condition match {
       case Alias(c, _) => c
       case other => other
@@ -1286,11 +1225,11 @@ case class RewriteQueryByMaterialView(spark: SparkSession)
   }
 
   def extractFilterConditions(plan: LogicalPlan,
-                              filterConditions: ArrayBuffer[Expression]): Unit ={
+                              filterConditions: ArrayBuffer[Expression]): Unit = {
     plan match {
       case Join(left, right, joinType, condition, _) =>
         assert(joinType.sql.equals(Inner.sql))
-        if (condition.isDefined){
+        if (condition.isDefined) {
           val newCondition = removeAlias(condition.get)
           filterConditions.append(splitConjunctivePredicates(newCondition): _*)
         }
@@ -1302,7 +1241,7 @@ case class RewriteQueryByMaterialView(spark: SparkSession)
         filterConditions.append(splitConjunctivePredicates(newCondition): _*)
         extractFilterConditions(child, filterConditions)
 
-      case lp: LogicalPlan if lp.children.nonEmpty=>
+      case lp: LogicalPlan if lp.children.nonEmpty =>
         lp.children.foreach(extractFilterConditions(_, filterConditions))
 
       case _ =>

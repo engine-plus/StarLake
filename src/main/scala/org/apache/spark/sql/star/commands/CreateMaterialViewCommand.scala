@@ -31,7 +31,7 @@ case class CreateMaterialViewCommand(viewName: String,
                                      autoUpdate: Boolean) extends RunnableCommand with Command {
 
   override def run(sparkSession: SparkSession): Seq[Row] = {
-    StarLakeUtils.executeWithoutQueryRewrite(sparkSession){
+    StarLakeUtils.executeWithoutQueryRewrite(sparkSession) {
       val snapshotManagement = SnapshotManagement(viewPath)
       snapshotManagement.withNewTransaction(tc => {
         //fast failed if view name already exists

@@ -20,6 +20,7 @@ import com.engineplus.star.meta.MaterialView
 import org.apache.spark.internal.Logging
 import org.apache.spark.sql.catalyst.expressions.PredicateHelper
 import org.apache.spark.sql.execution.command.RunnableCommand
+import org.apache.spark.sql.star.material_view.MaterialViewUtils
 import org.apache.spark.sql.star.utils.RelationTable
 import org.apache.spark.sql.star.{SnapshotManagement, StarLakeOptions, StarLakeUtils}
 import org.apache.spark.sql.{Row, SparkSession}
@@ -30,7 +31,7 @@ case class UpdateMaterialViewCommand(snapshotManagement: SnapshotManagement) ext
 
 
   final override def run(sparkSession: SparkSession): Seq[Row] = {
-    StarLakeUtils.executeWithoutQueryRewrite(sparkSession){
+    StarLakeUtils.executeWithoutQueryRewrite(sparkSession) {
       snapshotManagement.withNewTransaction(tc => {
         val tableInfo = tc.snapshot.getTableInfo
         val materialInfo = MaterialView.getMaterialViewInfo(tableInfo.short_table_name.get)
@@ -39,7 +40,7 @@ case class UpdateMaterialViewCommand(snapshotManagement: SnapshotManagement) ext
         val data = sparkSession.sql(materialInfo.get.sqlText)
 
         val currentRelationTableVersion = new ArrayBuffer[RelationTable]()
-        StarLakeUtils.parseRelationTableInfo(data.queryExecution.executedPlan, currentRelationTableVersion)
+        MaterialViewUtils.parseRelationTableInfo(data.queryExecution.executedPlan, currentRelationTableVersion)
 
         val currentRelationTableVersionMap = currentRelationTableVersion.map(m => (m.tableName, m)).toMap
 

@@ -22,7 +22,6 @@ import com.engineplus.star.livy.{CompactionJob, CompactionJobWithCondition, Exec
 import com.engineplus.star.meta.MetaVersion
 import com.engineplus.star.tables.execution.StarTableOperations
 import org.apache.hadoop.fs.Path
-import org.apache.spark.annotation._
 import org.apache.spark.internal.Logging
 import org.apache.spark.sql._
 import org.apache.spark.sql.catalyst.expressions.Expression
@@ -42,7 +41,6 @@ class StarTable(df: => Dataset[Row], snapshotManagement: SnapshotManagement)
     * SQL `tableName AS alias`.
     *
     */
-  @Evolving
   def as(alias: String): StarTable = new StarTable(df.as(alias), snapshotManagement)
 
   /**
@@ -50,7 +48,6 @@ class StarTable(df: => Dataset[Row], snapshotManagement: SnapshotManagement)
     * SQL `tableName AS alias`.
     *
     */
-  @Evolving
   def alias(alias: String): StarTable = as(alias)
 
 
@@ -58,7 +55,6 @@ class StarTable(df: => Dataset[Row], snapshotManagement: SnapshotManagement)
     * Get a DataFrame (that is, Dataset[Row]) representation of this StarTable.
     *
     */
-  @Evolving
   def toDF: Dataset[Row] = df
 
 
@@ -67,7 +63,6 @@ class StarTable(df: => Dataset[Row], snapshotManagement: SnapshotManagement)
     *
     * @param condition Boolean SQL expression
     */
-  @Evolving
   def delete(condition: String): Unit = {
     delete(functions.expr(condition))
   }
@@ -77,7 +72,6 @@ class StarTable(df: => Dataset[Row], snapshotManagement: SnapshotManagement)
     *
     * @param condition Boolean SQL expression
     */
-  @Evolving
   def delete(condition: Column): Unit = {
     executeDelete(Some(condition.expr))
   }
@@ -86,7 +80,6 @@ class StarTable(df: => Dataset[Row], snapshotManagement: SnapshotManagement)
     * Delete data from the table.
     *
     */
-  @Evolving
   def delete(): Unit = {
     executeDelete(None)
   }
@@ -105,7 +98,6 @@ class StarTable(df: => Dataset[Row], snapshotManagement: SnapshotManagement)
     * @param set rules to update a row as a Scala map between target column names and
     *            corresponding update expressions as Column objects.
     */
-  @Evolving
   def update(set: Map[String, Column]): Unit = {
     executeUpdate(set, None)
   }
@@ -128,7 +120,6 @@ class StarTable(df: => Dataset[Row], snapshotManagement: SnapshotManagement)
     * @param set rules to update a row as a Java map between target column names and
     *            corresponding update expressions as Column objects.
     */
-  @Evolving
   def update(set: java.util.Map[String, Column]): Unit = {
     executeUpdate(set.asScala.toMap, None)
   }
@@ -150,7 +141,6 @@ class StarTable(df: => Dataset[Row], snapshotManagement: SnapshotManagement)
     * @param set       rules to update a row as a Scala map between target column names and
     *                  corresponding update expressions as Column objects.
     */
-  @Evolving
   def update(condition: Column, set: Map[String, Column]): Unit = {
     executeUpdate(set, Some(condition))
   }
@@ -176,7 +166,6 @@ class StarTable(df: => Dataset[Row], snapshotManagement: SnapshotManagement)
     * @param set       rules to update a row as a Java map between target column names and
     *                  corresponding update expressions as Column objects.
     */
-  @Evolving
   def update(condition: Column, set: java.util.Map[String, Column]): Unit = {
     executeUpdate(set.asScala.toMap, Some(condition))
   }
@@ -192,7 +181,6 @@ class StarTable(df: => Dataset[Row], snapshotManagement: SnapshotManagement)
     * @param set rules to update a row as a Scala map between target column names and
     *            corresponding update expressions as SQL formatted strings.
     */
-  @Evolving
   def updateExpr(set: Map[String, String]): Unit = {
     executeUpdate(toStrColumnMap(set), None)
   }
@@ -212,7 +200,6 @@ class StarTable(df: => Dataset[Row], snapshotManagement: SnapshotManagement)
     * @param set rules to update a row as a Java map between target column names and
     *            corresponding update expressions as SQL formatted strings.
     */
-  @Evolving
   def updateExpr(set: java.util.Map[String, String]): Unit = {
     executeUpdate(toStrColumnMap(set.asScala.toMap), None)
   }
@@ -233,7 +220,6 @@ class StarTable(df: => Dataset[Row], snapshotManagement: SnapshotManagement)
     * @param set       rules to update a row as a Scala map between target column names and
     *                  corresponding update expressions as SQL formatted strings.
     */
-  @Evolving
   def updateExpr(condition: String, set: Map[String, String]): Unit = {
     executeUpdate(toStrColumnMap(set), Some(functions.expr(condition)))
   }
@@ -257,7 +243,6 @@ class StarTable(df: => Dataset[Row], snapshotManagement: SnapshotManagement)
     * @param set       rules to update a row as a Java map between target column names and
     *                  corresponding update expressions as SQL formatted strings.
     */
-  @Evolving
   def updateExpr(condition: String, set: java.util.Map[String, String]): Unit = {
     executeUpdate(toStrColumnMap(set.asScala.toMap), Some(functions.expr(condition)))
   }
@@ -434,7 +419,6 @@ object StarTable {
     * `SparkSession.getActiveSession()` is empty.
     *
     */
-  @Evolving
   def forPath(path: String): StarTable = {
     val sparkSession = SparkSession.getActiveSession.getOrElse {
       throw new IllegalArgumentException("Could not find active SparkSession")
@@ -448,7 +432,6 @@ object StarTable {
     * Create a StarTable for the data at the given `path` using the given SparkSession.
     *
     */
-  @Evolving
   def forPath(sparkSession: SparkSession, path: String): StarTable = {
     if (StarLakeUtils.isStarLakeTable(sparkSession, new Path(path))) {
       new StarTable(sparkSession.read.format(StarLakeSourceUtils.SOURCENAME).load(path),

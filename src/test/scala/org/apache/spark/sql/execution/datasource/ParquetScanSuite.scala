@@ -407,7 +407,7 @@ class ParquetScanSuite extends QueryTest
           .save(tablePath)
 
         val table = StarTable.forPath(tablePath)
-        checkAnswer(table.toDF.filter("value >= 3").select("range","hash","value"),
+        checkAnswer(table.toDF.filter("value >= 3").select("range", "hash", "value"),
           Seq((20201101, 3, 3))
             .toDF("range", "hash", "value"))
 

@@ -218,8 +218,6 @@ object StarLakeDataSource extends Logging {
         // Nested fields cannot be partitions, so we pass the key as a identifier
         EqualTo(UnresolvedAttribute(Seq(key)), Literal(value))
       }
-      //      val files = PartitionFilter.filterFileList(
-      //        table_info.range_partition_schema, snapshot.allDataInfoDS.toDF(), filters)
       val files = PartitionFilter.partitionsForScan(snapshot, filters)
       if (files.isEmpty) {
         throw StarLakeErrors.tableNotExistsException(userPath)

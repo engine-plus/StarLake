@@ -48,9 +48,9 @@ case class PartitionInfo(table_id: String,
   }
 }
 
-// table_schema是json数据
-// range_column和hash_column都是字符串，不是json
-//hash_partition_column 可以包含多个分区key，用逗号分隔
+// table_schema is json format data
+// range_column and hash_column are string， not json format
+//hash_partition_column contains multi keys，concat with `,`
 case class TableInfo(table_name: String,
                      table_id: String,
                      table_schema: String = null,
@@ -67,14 +67,14 @@ case class TableInfo(table_name: String,
   lazy val hash_partition_columns: Seq[String] = hash_partition_schema.fieldNames
 
   /** Returns the schema as a [[StructType]] */
-  //包含分区字段的全表schema
+  //full table schema which contains partition columns
   @JsonIgnore
   lazy val schema: StructType =
   Option(table_schema).map { s =>
     DataType.fromJson(s).asInstanceOf[StructType]
   }.getOrElse(StructType.apply(Nil))
 
-  //range分区字段
+  //range partition columns
   @JsonIgnore
   lazy val range_partition_schema: StructType =
   if (range_column.equalsIgnoreCase("")) {
@@ -83,7 +83,7 @@ case class TableInfo(table_name: String,
     StructType(range_column.split(",").map(c => schema(c)))
   }
 
-  //hash分区字段
+  //hash partition columns
   @JsonIgnore
   lazy val hash_partition_schema: StructType =
   if (hash_column.equalsIgnoreCase("")) {
@@ -92,12 +92,12 @@ case class TableInfo(table_name: String,
     StructType(hash_column.split(",").map(c => schema(c)))
   }
 
-  //所有分区字段
+  //all partition columns
   lazy val partition_schema: StructType = range_partition_schema.merge(hash_partition_schema)
 
-  //hash字段属于data_schema !!!
+  //hash is belong to data_schema !!!
   private lazy val range_partition_set: Set[String] = range_column.split(",").toSet
-  //除range分区字段外的其他数据字段
+  //all data schema except range partition columns
   @JsonIgnore
   lazy val data_schema: StructType = StructType(schema.filterNot(f => range_partition_set.contains(f.name)))
 
@@ -117,7 +117,7 @@ case class TableInfo(table_name: String,
 }
 
 
-//单个文件的信息
+//single file info
 case class DataFileInfo(file_path: String,
                         range_partitions: Map[String, String],
                         size: Long,
@@ -134,7 +134,7 @@ case class DataFileInfo(file_path: String,
     .getBucketId(new Path(file_path).getName)
     .getOrElse(sys.error(s"Invalid bucket file $file_path"))
 
-  //转化为待删除文件
+  //trans to files which need to delete
   def expire(deleteTime: Long): DataFileInfo = this.copy(modification_time = deleteTime)
 }
 
@@ -146,12 +146,12 @@ case class PartitionFilterInfo(range_id: String,
 
 
 /**
-  * commit状态信息，用于判断commit的状态，并根据状态执行相应的操作
+  * commit state info
   *
-  * @param state     commit状态
+  * @param state     commit state
   * @param commit_id commit id
-  * @param tag       回滚标识符
-  * @param timestamp 时间戳
+  * @param tag       identifier to redo or rollback
+  * @param timestamp timestamp of commit
   */
 case class commitStateInfo(state: CommitState.Value,
                            table_name: String,
@@ -161,15 +161,9 @@ case class commitStateInfo(state: CommitState.Value,
                            timestamp: Long)
 
 /**
-  * undo log 信息
+  * undo log info
   *
-  * @param commit_type   标识类型，有partition和data
-  * @param table_name    表名
-  * @param range_value   分区名
-  * @param commit_id     commit id
-  * @param file_path     文件路径
-  *                      //  * @param tag            commit类型的回滚标识，0表示commit，大于0表示回滚，其他类型为 -1
-  * @param write_version 写版本号
+  * @param tag  commit identifier，0 is committing，greater than 0 is rollback，-1 is redoing
   */
 case class undoLogInfo(commit_type: String,
                        table_id: String,

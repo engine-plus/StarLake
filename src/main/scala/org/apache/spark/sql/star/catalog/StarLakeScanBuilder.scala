@@ -28,6 +28,7 @@ import org.apache.spark.sql.execution.datasources.v2.merge.{MultiPartitionMergeB
 import org.apache.spark.sql.execution.datasources.v2.parquet.{BucketParquetScan, ParquetScan}
 import org.apache.spark.sql.sources.Filter
 import org.apache.spark.sql.star.exception.StarLakeErrors
+import org.apache.spark.sql.star.material_view.MaterialViewUtils
 import org.apache.spark.sql.star.sources.{StarLakeSQLConf, StarLakeSourceUtils}
 import org.apache.spark.sql.star.utils.{RelationTable, TableInfo}
 import org.apache.spark.sql.star.{StarLakeFileIndexV2, StarLakeUtils}
@@ -104,13 +105,13 @@ case class StarLakeScanBuilder(sparkSession: SparkSession,
       && !sparkSession.sessionState.conf.getConf(StarLakeSQLConf.ALLOW_STALE_MATERIAL_VIEW)) {
 
       //forbid using material rewrite this plan
-      StarLakeUtils.executeWithoutQueryRewrite(sparkSession){
+      StarLakeUtils.executeWithoutQueryRewrite(sparkSession) {
         val materialInfo = MaterialView.getMaterialViewInfo(tableInfo.short_table_name.get)
         assert(materialInfo.isDefined)
 
         val data = sparkSession.sql(materialInfo.get.sqlText)
         val currentRelationTableVersion = new ArrayBuffer[RelationTable]()
-        StarLakeUtils.parseRelationTableInfo(data.queryExecution.executedPlan, currentRelationTableVersion)
+        MaterialViewUtils.parseRelationTableInfo(data.queryExecution.executedPlan, currentRelationTableVersion)
         val currentRelationTableVersionMap = currentRelationTableVersion.map(m => (m.tableName, m)).toMap
         val isConsistent = materialInfo.get.relationTables.forall(f => {
           val currentVersion = currentRelationTableVersionMap(f.tableName)

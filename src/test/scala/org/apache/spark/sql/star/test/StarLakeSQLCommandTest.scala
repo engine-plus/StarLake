@@ -20,10 +20,8 @@ import java.io.File
 
 import com.engineplus.star.sql.StarSparkSessionExtension
 import com.engineplus.star.tables
-import com.engineplus.star.tables.StarTable
 import org.apache.spark.SparkConf
 import org.apache.spark.internal.Logging
-import org.apache.spark.sql.catalyst.TableIdentifier
 import org.apache.spark.sql.internal.SQLConf
 import org.apache.spark.sql.star.catalog.StarLakeCatalog
 import org.apache.spark.sql.star.sources.StarLakeSQLConf

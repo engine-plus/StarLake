@@ -16,18 +16,23 @@
 
 package org.apache.spark.sql.star.material_view
 
-import org.apache.spark.sql.catalyst.expressions.{Alias, AttributeReference, BinaryComparison, Cast, EqualNullSafe, EqualTo, Expression, GreaterThan, GreaterThanOrEqual, Length, LessThan, LessThanOrEqual, Literal, PredicateHelper}
+import org.apache.spark.sql.catalyst.expressions.{Alias, AttributeReference, EqualNullSafe, EqualTo, Expression, GreaterThan, GreaterThanOrEqual, LessThan, LessThanOrEqual, Literal, PredicateHelper}
 import org.apache.spark.sql.catalyst.plans.Inner
-import org.apache.spark.sql.catalyst.plans.logical.{Aggregate, DeserializeToObject, Filter, Join, LocalRelation, LogicalPlan, Project, Range, SerializeFromObject, Sort, SubqueryAlias}
-import org.apache.spark.sql.execution.datasources.v2.DataSourceV2Relation
+import org.apache.spark.sql.catalyst.plans.logical.{Aggregate, DeserializeToObject, Filter, Join, LocalRelation, LogicalPlan, Project, Range, SerializeFromObject, SubqueryAlias}
+import org.apache.spark.sql.execution.SparkPlan
+import org.apache.spark.sql.execution.datasources.v2.merge.MergeDeltaParquetScan
+import org.apache.spark.sql.execution.datasources.v2.{BatchScanExec, DataSourceV2Relation, FileScan}
 import org.apache.spark.sql.star.catalog.StarLakeTableV2
 import org.apache.spark.sql.star.exception.StarLakeErrors
+import org.apache.spark.sql.star.utils.RelationTable
+import org.apache.spark.sql.star.{PartitionFilter, StarLakeFileIndexV2}
 
 import scala.collection.mutable
+import scala.collection.mutable.ArrayBuffer
 
-object MaterialViewUtils extends PredicateHelper{
+object MaterialViewUtils extends PredicateHelper {
 
-  def parseOutputInfo(plan: LogicalPlan, constructInfo: ConstructQueryInfo): Unit ={
+  def parseOutputInfo(plan: LogicalPlan, constructInfo: ConstructQueryInfo): Unit = {
     plan match {
       case Project(projectList, child) =>
         projectList.foreach({
@@ -39,7 +44,7 @@ object MaterialViewUtils extends PredicateHelper{
 
       //fast failed when parsing Aggregate with havingCondition, because it is not a real plan
       case Aggregate(_, aggExpr, _) if aggExpr.head.isInstanceOf[Alias]
-        && aggExpr.head.asInstanceOf[Alias].name.equals("havingCondition")=>
+        && aggExpr.head.asInstanceOf[Alias].name.equals("havingCondition") =>
         throw StarLakeErrors.unsupportedLogicalPlanWhileRewriteQueryException("havingCondition")
 
       case Aggregate(groupingExpressions, aggregateExpressions, child) =>
@@ -76,7 +81,7 @@ object MaterialViewUtils extends PredicateHelper{
         case DataSourceV2Relation(table, _, _, _, _) if !table.isInstanceOf[StarLakeTableV2] =>
           throw StarLakeErrors.materialViewBuildWithNonStarTableException()
 
-        case DataSourceV2Relation(table: StarLakeTableV2, _,_,_,_) => set.add(table.name())
+        case DataSourceV2Relation(table: StarLakeTableV2, _, _, _, _) => set.add(table.name())
 
         //Recursive search table name
         case o => o.children.foreach(findTableNames(_, set, allowJoin))
@@ -112,7 +117,7 @@ object MaterialViewUtils extends PredicateHelper{
         }
         val filters = splitConjunctivePredicates(withoutAliasCondition)
         //if this filter is under Aggregate, it should match all with query
-        if(underAggregate){
+        if (underAggregate) {
           filters.foreach {
             case EqualTo(left, right) =>
               constructInfo.addColumnEqualInfo(left.sql, right.sql)
@@ -121,7 +126,7 @@ object MaterialViewUtils extends PredicateHelper{
           }
 
           parseMaterialInfo(child, constructInfo, underAggregate)
-        }else{
+        } else {
           //if not under Aggregate, we can parse them to range conditions
           filters.foreach(f => parseCondition(f, constructInfo))
           parseMaterialInfo(child, constructInfo, underAggregate)
@@ -139,13 +144,13 @@ object MaterialViewUtils extends PredicateHelper{
         findTableNames(right, rightTables, allowJoinBelow)
         joinInfo.setJoinInfo(leftTables.toSet, rightTables.toSet, joinType.sql)
 
-        if(condition.isDefined){
-          if(allowJoinBelow){
+        if (condition.isDefined) {
+          if (allowJoinBelow) {
             //inner join condition can be extract to `where`
             //sql: select * from a join b on (a.id=b.id and a.v>1) where b.v>2
             // is semantically equivalent to
             //sql: select * from a join b where a.id=b.id and a.v>1 and b.v>2
-            if(underAggregate){
+            if (underAggregate) {
               //add condition to aggInfo which should match all condition when rewrite
               splitConjunctivePredicates(condition.get).foreach {
                 case EqualTo(l, r) =>
@@ -153,11 +158,11 @@ object MaterialViewUtils extends PredicateHelper{
                   constructInfo.setAggEqualCondition(l.sql, r.sql)
                 case other => constructInfo.setAggOtherCondition(other.sql)
               }
-            }else{
+            } else {
               //add condition to query level info which can match part of condition when rewrite
               splitConjunctivePredicates(condition.get).foreach(f => parseCondition(f, constructInfo))
             }
-          }else{
+          } else {
             //add condition to join info
             splitConjunctivePredicates(condition.get).foreach {
               case EqualTo(left: AttributeReference, right: AttributeReference) =>
@@ -177,7 +182,7 @@ object MaterialViewUtils extends PredicateHelper{
 
 
       case Aggregate(groupingExpressions, aggregateExpressions, child) =>
-        if (underAggregate){
+        if (underAggregate) {
           throw StarLakeErrors.canNotCreateMaterialViewOrRewriteQueryException(
             "Multi aggregate expression is not support now")
         }
@@ -194,7 +199,6 @@ object MaterialViewUtils extends PredicateHelper{
         })
 
         parseMaterialInfo(child, constructInfo, true)
-
 
 
       case SubqueryAlias(ident, child) =>
@@ -214,12 +218,7 @@ object MaterialViewUtils extends PredicateHelper{
             constructInfo.addTableInfo(ident.toString(), identifier.toString())
             parseMaterialInfo(child, constructInfo, underAggregate)
 
-          case DataSourceV2Relation(table: StarLakeTableV2, _,_,identifier,_) =>
-//            if (identifier.isDefined){
-//              constructInfo.addTableInfo(ident.toString(), identifier.get.toString)
-//              constructInfo.addTableInfo(identifier.get.toString, table.name())
-//            }else{
-//            }
+          case DataSourceV2Relation(table: StarLakeTableV2, _, _, identifier, _) =>
             constructInfo.addTableInfo(ident.toString(), table.name())
             parseMaterialInfo(child, constructInfo, underAggregate)
 
@@ -231,7 +230,7 @@ object MaterialViewUtils extends PredicateHelper{
 
 
       case DataSourceV2Relation(table: StarLakeTableV2, _, _, _, _) =>
-        if(table.snapshotManagement.getTableInfoOnly.is_material_view){
+        if (table.snapshotManagement.getTableInfoOnly.is_material_view) {
           throw StarLakeErrors.canNotCreateMaterialViewOrRewriteQueryException(
             "A material view can't be used to create or rewrite another material view")
         }
@@ -239,7 +238,6 @@ object MaterialViewUtils extends PredicateHelper{
 
       case DataSourceV2Relation(table, _, _, _, _) if !table.isInstanceOf[StarLakeTableV2] =>
         throw StarLakeErrors.materialViewBuildWithNonStarTableException()
-
 
 
       case lp: LogicalPlan if lp.children.nonEmpty =>
@@ -255,18 +253,11 @@ object MaterialViewUtils extends PredicateHelper{
   //parse conditions which can
   private def parseCondition(condition: Expression, constructInfo: ConstructProperties): Unit = {
     condition match {
-//      case exp @ EqualTo(_,_) | EqualNullSafe(_,_) =>
-//        parseEqualCondition(exp, constructInfo)
-
       case expression: EqualTo =>
         parseEqualCondition(expression, constructInfo)
 
       case expression: EqualNullSafe =>
         parseEqualCondition(expression, constructInfo)
-
-//      case exp @ GreaterThan(_,_) | GreaterThanOrEqual(_,_) | LessThan(_,_) | LessThanOrEqual(_,_) =>
-//        parseRangeCondition(exp, constructInfo)
-
 
       case expression: GreaterThan =>
         parseRangeCondition(expression, constructInfo)
@@ -281,14 +272,11 @@ object MaterialViewUtils extends PredicateHelper{
         parseRangeCondition(expression, constructInfo)
 
 
-      //todo: make a better matching on or and other complex condition
-//      case other => constructInfo.addOtherInfo(other.sql)
-
       case other =>
         val splitOr = splitDisjunctivePredicates(other)
-        if(splitOr.length == 1){
+        if (splitOr.length == 1) {
           constructInfo.addOtherInfo(other.sql)
-        }else{
+        } else {
           //there are some `or` conditions in this expression
           splitOr.foreach(f => {
             val orInfo = new OrInfo()
@@ -299,7 +287,6 @@ object MaterialViewUtils extends PredicateHelper{
           })
 
         }
-
 
 
     }
@@ -313,12 +300,12 @@ object MaterialViewUtils extends PredicateHelper{
       case EqualTo(left: Literal, right) =>
         info.addConditionEqualInfo(right.sql, left.value.toString)
 
-      case e @ EqualTo(left, right) =>
+      case e@EqualTo(left, right) =>
         info.addColumnEqualInfo(left.sql, right.sql)
         //sort to match equal condition, like (t1.a=t2.a) compare to (t2.a=t1.a)
-        if(left.sql.compareTo(right.sql) <= 0){
+        if (left.sql.compareTo(right.sql) <= 0) {
           info.addOtherInfo(e.sql)
-        }else{
+        } else {
           info.addOtherInfo(e.copy(left = right, right = left).sql)
         }
 
@@ -328,12 +315,12 @@ object MaterialViewUtils extends PredicateHelper{
       case EqualNullSafe(left: Literal, right) =>
         info.addConditionEqualInfo(right.sql, left.value.toString)
 
-      case e @ EqualNullSafe(left, right) =>
+      case e@EqualNullSafe(left, right) =>
         info.addColumnEqualInfo(left.sql, right.sql)
         //sort to match equal condition, like (t1.a=t2.a) compare to (t2.a=t1.a)
-        if(left.sql.compareTo(right.sql) <= 0){
+        if (left.sql.compareTo(right.sql) <= 0) {
           info.addOtherInfo(e.sql)
-        }else{
+        } else {
           info.addOtherInfo(e.copy(left = right, right = left).sql)
         }
 
@@ -371,12 +358,43 @@ object MaterialViewUtils extends PredicateHelper{
     }
 
 
-
-
   }
 
 
+  /**
+    * parse relation table info for material view from spark plan
+    *
+    * @param plan  spark plan
+    * @param array result array buffer
+    */
+  def parseRelationTableInfo(plan: SparkPlan, array: ArrayBuffer[RelationTable]): Unit = {
+    plan match {
+      case BatchScanExec(_, scan) =>
+        val (fileIndex, filters) = scan match {
+          case fileScan: FileScan if fileScan.fileIndex.isInstanceOf[StarLakeFileIndexV2] =>
+            (fileScan.fileIndex.asInstanceOf[StarLakeFileIndexV2], fileScan.partitionFilters)
 
+          case mergeScan: MergeDeltaParquetScan => (mergeScan.getFileIndex, mergeScan.getPartitionFilters)
+
+          case _ => throw StarLakeErrors.materialViewBuildWithNonStarTableException()
+        }
+
+        val tableName = fileIndex.tableName
+        val snapshot = fileIndex.snapshotManagement.snapshot
+        val partitionInfo = PartitionFilter.partitionsForScan(snapshot, filters)
+          .map(m => (m.range_id, m.read_version.toString))
+
+        if (snapshot.getTableInfo.is_material_view) {
+          throw StarLakeErrors.materialViewBuildWithAnotherMaterialViewException()
+        }
+
+        array += RelationTable(tableName, snapshot.getTableInfo.table_id, partitionInfo)
+
+      case p: SparkPlan if p.children.nonEmpty => p.children.foreach(parseRelationTableInfo(_, array))
+
+      case _ => throw StarLakeErrors.materialViewBuildWithNonStarTableException()
+    }
+  }
 
 
 }

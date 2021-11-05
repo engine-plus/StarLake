@@ -117,9 +117,9 @@ case class CreateTableCommand(table: CatalogTable,
     val tc = snapshotManagement.startTransaction()
 
     val shortTableName = table.identifier.table
-    if (MetaVersion.isShortTableNameExists(shortTableName)._1){
+    if (MetaVersion.isShortTableNameExists(shortTableName)._1) {
       throw StarLakeErrors.tableExistsException(shortTableName)
-    }else{
+    } else {
       tc.setShortTableName(shortTableName)
     }
 

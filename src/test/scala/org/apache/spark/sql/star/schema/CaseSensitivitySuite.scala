@@ -276,34 +276,6 @@ class CaseSensitivitySuite extends QueryTest
     }
   }
 
-
-//  test("case sensitivity of partition fields") {
-//
-//    withSQLConf(SQLConf.CASE_SENSITIVE.key -> "true") {
-//
-//      withTempDir { tempDir =>
-//        val query = "SELECT id + 1 as Foo, id as Bar FROM RANGE(1)"
-//        sql(query).write
-//          //        .partitionBy("foo")
-//          .option("rangePartitions", "foo")
-//          .format("star").save(tempDir.getAbsolutePath)
-//        checkAnswer(
-//          sql(query),
-//          spark.read.format("star").load(tempDir.getAbsolutePath).select("Foo", "Bar")
-//        )
-//
-//
-//        val allFiles = SnapshotManagement(tempDir.getAbsolutePath).snapshot.allDataInfoDS
-//        assert(getPartitionValues(allFiles, "Foo") === Array("1"))
-//        checkAnswer(
-//          spark.read.format("star").load(tempDir.getAbsolutePath).select("Foo", "Bar"),
-//          Row(1L, 0L)
-//        )
-//      }
-//    }
-//
-//  }
-
   testWithCaseSensitivity("case sensitivity of partition fields") {
     withTempDir { tempDir =>
       val query = "SELECT id + 1 as Foo, id as Bar FROM RANGE(1)"

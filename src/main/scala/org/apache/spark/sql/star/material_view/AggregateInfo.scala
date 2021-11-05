@@ -47,14 +47,6 @@ class AggregateInfo {
     aggColumns = cols
   }
 
-//  def getAggregateInfo(): AggregateDetail = {
-//    AggregateDetail(
-//      aggTables,
-//      aggColumns,
-//      aggEqualConditions.toSet,
-//      aggOtherConditions.toSet)
-//  }
-
   def buildAggregateDetail(tables: Map[String, String], asInfo: Map[String, String]): AggregateDetail = {
     AggregateDetail(
       aggTables.map(getFinalStringByReplace(_, tables, asInfo)),

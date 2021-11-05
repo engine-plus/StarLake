@@ -31,9 +31,9 @@ import org.apache.spark.sql.execution.datasources.v2.merge.parquet.batch.merge_o
 import org.apache.spark.sql.execution.datasources.v2.merge.parquet.{MergeFilePartitionReaderFactory, MergeParquetPartitionReaderFactory}
 import org.apache.spark.sql.internal.SQLConf
 import org.apache.spark.sql.sources.Filter
+import org.apache.spark.sql.star._
 import org.apache.spark.sql.star.sources.StarLakeSQLConf
 import org.apache.spark.sql.star.utils.{DataFileInfo, TableInfo}
-import org.apache.spark.sql.star._
 import org.apache.spark.sql.types.StructType
 import org.apache.spark.sql.util.CaseInsensitiveStringMap
 import org.apache.spark.sql.{AnalysisException, SparkSession}
@@ -56,7 +56,9 @@ abstract class MergeDeltaParquetScan(sparkSession: SparkSession,
   extends Scan with Batch
     with SupportsReportStatistics with Logging {
   def getFileIndex: StarLakeFileIndexV2 = fileIndex
+
   def getPartitionFilters: Seq[Expression] = partitionFilters
+
   def isSplittable(path: Path): Boolean = false
 
   //it may has to many delta files, check if we should compact part of files first to save memory

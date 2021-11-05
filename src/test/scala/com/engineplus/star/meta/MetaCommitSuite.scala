@@ -227,7 +227,6 @@ class MetaCommitSuite extends MetaCommitSuiteBase {
 
       val oldReadVersion = partitionInfoArr.map(_.read_version).max
 
-      //添加commit类型undo log，返回生成的commit_id
       val commit_id = generateCommitIdToAddUndoLog(
         metaInfo1.table_info.table_name,
         metaInfo1.table_info.table_id,

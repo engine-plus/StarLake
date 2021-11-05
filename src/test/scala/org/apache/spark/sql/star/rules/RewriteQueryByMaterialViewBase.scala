@@ -1,11 +1,27 @@
+/*
+ * Copyright [2021] [EnginePlus Team]
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
 package org.apache.spark.sql.star.rules
 
 import com.engineplus.star.tables.StarTable
-import org.apache.spark.sql.{AnalysisException, QueryTest}
 import org.apache.spark.sql.star.test.StarLakeSQLCommandTest
 import org.apache.spark.sql.test.SharedSparkSession
-import org.scalatest.BeforeAndAfterAll
+import org.apache.spark.sql.{AnalysisException, QueryTest}
 import org.apache.spark.util.Utils
+import org.scalatest.BeforeAndAfterAll
 
 abstract class RewriteQueryByMaterialViewBase extends QueryTest
   with SharedSparkSession with StarLakeSQLCommandTest with BeforeAndAfterAll {
@@ -17,16 +33,8 @@ abstract class RewriteQueryByMaterialViewBase extends QueryTest
   val tablePath2: String = Utils.createTempDir().getCanonicalPath
   val tablePath3: String = Utils.createTempDir().getCanonicalPath
 
-
-
-
-
-  //  val viewName: String = "material_view"
-  //  val viewPath: String = Utils.createTempDir().getCanonicalPath
-
-
-  def prepareTable1(): Unit ={
-    Seq((1,"a",11),(2,"b",11),(3,"c",11),(4,"d",11)).toDF("key","value","range")
+  def prepareTable1(): Unit = {
+    Seq((1, "a", 11), (2, "b", 11), (3, "c", 11), (4, "d", 11)).toDF("key", "value", "range")
       .write
       .mode("overwrite")
       .format("star")
@@ -38,7 +46,7 @@ abstract class RewriteQueryByMaterialViewBase extends QueryTest
   }
 
   def prepareTable2(): Unit = {
-    Seq((1,"aa",22),(3,"cc",22),(5,"ee",22),(6,"ff",22)).toDF("key","value","range")
+    Seq((1, "aa", 22), (3, "cc", 22), (5, "ee", 22), (6, "ff", 22)).toDF("key", "value", "range")
       .write
       .mode("overwrite")
       .format("star")
@@ -47,9 +55,9 @@ abstract class RewriteQueryByMaterialViewBase extends QueryTest
 
   def prepareTable3(): Unit = {
     Seq(
-      (1,"a","a2",22),(3,"c","c2",22),(5,"e","e2",22),(6,"f","f2",22),
-      (1,"a","a3",33),(4,"d","d3",33),(5,"e","e3",33),(6,"f","f3",33)
-    ).toDF("k1","k2","value","range")
+      (1, "a", "a2", 22), (3, "c", "c2", 22), (5, "e", "e2", 22), (6, "f", "f2", 22),
+      (1, "a", "a3", 33), (4, "d", "d3", 33), (5, "e", "e3", 33), (6, "f", "f3", 33)
+    ).toDF("k1", "k2", "value", "range")
       .write
       .mode("overwrite")
       .option("rangePartitions", "range")
@@ -74,7 +82,7 @@ abstract class RewriteQueryByMaterialViewBase extends QueryTest
   }
 
 
-  override def beforeAll(){
+  override def beforeAll() {
 
     super.beforeAll()
     prepareTable1()
@@ -86,7 +94,7 @@ abstract class RewriteQueryByMaterialViewBase extends QueryTest
   }
 
 
-  override def afterAll(){
+  override def afterAll() {
     StarTable.forPath(tablePath1).dropTable()
     StarTable.forPath(tablePath2).dropTable()
     StarTable.forPath(tablePath3).dropTable()
@@ -98,6 +106,7 @@ abstract class RewriteQueryByMaterialViewBase extends QueryTest
 }
 
 class SimpleRewriteWithSingleTable extends RewriteQueryByMaterialViewBase {
+
   import testImplicits._
 
   val viewName1: String = "material_view1"
@@ -122,7 +131,7 @@ class SimpleRewriteWithSingleTable extends RewriteQueryByMaterialViewBase {
   }
 
 
-  test("same query will be rewritten by material view"){
+  test("same query will be rewritten by material view") {
     val sqlText =
       s"""
          |select a.key,value,range,length(range) as lr,concat_ws(',',key,a.value,'something') as cw
@@ -136,16 +145,16 @@ class SimpleRewriteWithSingleTable extends RewriteQueryByMaterialViewBase {
 
     checkAnswer(query.select("key", "value", "range", "lr", "cw"),
       Seq(
-        (1,"a",11,2,"1,a,something"),
-        (2,"b",11,2,"2,b,something"),
-        (3,"c",11,2,"3,c,something"),
-        (4,"d",11,2,"4,d,something"))
+        (1, "a", 11, 2, "1,a,something"),
+        (2, "b", 11, 2, "2,b,something"),
+        (3, "c", 11, 2, "3,c,something"),
+        (4, "d", 11, 2, "4,d,something"))
         .toDF("key", "value", "range", "lr", "cw"))
 
   }
 
 
-  test("query with short table name will be rewritten by material view"){
+  test("query with short table name will be rewritten by material view") {
     val sqlText =
       s"""
          |select a.key,value,range,length(range) as lr,concat_ws(',',key,a.value,'something') as cw
@@ -158,7 +167,7 @@ class SimpleRewriteWithSingleTable extends RewriteQueryByMaterialViewBase {
     assert(plan.contains(viewPath1))
   }
 
-  test("same query with range condition both sides exchanged will be rewritten by material view"){
+  test("same query with range condition both sides exchanged will be rewritten by material view") {
     val sqlText =
       s"""
          |select a.key,value,range,length(range) as lr,concat_ws(',',key,a.value,'something') as cw
@@ -172,16 +181,16 @@ class SimpleRewriteWithSingleTable extends RewriteQueryByMaterialViewBase {
 
     checkAnswer(query.select("key", "value", "range", "lr", "cw"),
       Seq(
-        (1,"a",11,2,"1,a,something"),
-        (2,"b",11,2,"2,b,something"),
-        (3,"c",11,2,"3,c,something"),
-        (4,"d",11,2,"4,d,something"))
+        (1, "a", 11, 2, "1,a,something"),
+        (2, "b", 11, 2, "2,b,something"),
+        (3, "c", 11, 2, "3,c,something"),
+        (4, "d", 11, 2, "4,d,something"))
         .toDF("key", "value", "range", "lr", "cw"))
 
   }
 
 
-  test("same query with different column name will be rewritten by material view"){
+  test("same query with different column name will be rewritten by material view") {
     val sqlText =
       s"""
          |select a.key,value,range,length(range) as cw,concat_ws(',',key,a.value,'something') as lr
@@ -195,15 +204,15 @@ class SimpleRewriteWithSingleTable extends RewriteQueryByMaterialViewBase {
 
     checkAnswer(query.select("key", "value", "range", "cw", "lr"),
       Seq(
-        (1,"a",11,2,"1,a,something"),
-        (2,"b",11,2,"2,b,something"),
-        (3,"c",11,2,"3,c,something"),
-        (4,"d",11,2,"4,d,something"))
+        (1, "a", 11, 2, "1,a,something"),
+        (2, "b", 11, 2, "2,b,something"),
+        (3, "c", 11, 2, "3,c,something"),
+        (4, "d", 11, 2, "4,d,something"))
         .toDF("key", "value", "range", "cw", "lr"))
 
   }
 
-  test("query with large range interval shouldn't rewrite"){
+  test("query with large range interval shouldn't rewrite") {
     val sqlText1 =
       s"""
          |select key
@@ -227,7 +236,7 @@ class SimpleRewriteWithSingleTable extends RewriteQueryByMaterialViewBase {
   }
 
 
-  test("query with subset range interval should rewrite"){
+  test("query with subset range interval should rewrite") {
     val sqlText1 =
       s"""
          |select key
@@ -239,8 +248,8 @@ class SimpleRewriteWithSingleTable extends RewriteQueryByMaterialViewBase {
     assert(plan1.contains(viewPath1))
     checkAnswer(query1.select("key"),
       Seq(
-        (1,"a",11,2,"1,a,something"),(2,"b",11,2,"2,b,something"),
-        (3,"c",11,2,"3,c,something"),(4,"d",11,2,"4,d,something"))
+        (1, "a", 11, 2, "1,a,something"), (2, "b", 11, 2, "2,b,something"),
+        (3, "c", 11, 2, "3,c,something"), (4, "d", 11, 2, "4,d,something"))
         .toDF("key", "value", "range", "lr", "cw")
         .select("key"))
 
@@ -256,14 +265,14 @@ class SimpleRewriteWithSingleTable extends RewriteQueryByMaterialViewBase {
     assert(plan2.contains(viewPath1))
     checkAnswer(query2.select("key"),
       Seq(
-        (1,"a",11,2,"1,a,something"),(2,"b",11,2,"2,b,something"),
-        (3,"c",11,2,"3,c,something"),(4,"d",11,2,"4,d,something"))
+        (1, "a", 11, 2, "1,a,something"), (2, "b", 11, 2, "2,b,something"),
+        (3, "c", 11, 2, "3,c,something"), (4, "d", 11, 2, "4,d,something"))
         .toDF("key", "value", "range", "lr", "cw")
         .select("key"))
   }
 
 
-  test("query with external condition should rewrite"){
+  test("query with external condition should rewrite") {
     val sqlText1 =
       s"""
          |select key
@@ -275,7 +284,7 @@ class SimpleRewriteWithSingleTable extends RewriteQueryByMaterialViewBase {
     assert(plan1.contains(viewPath1))
     checkAnswer(query1.select("key"),
       Seq(
-        (3,"c",11,2,"3,c,something"),(4,"d",11,2,"4,d,something"))
+        (3, "c", 11, 2, "3,c,something"), (4, "d", 11, 2, "4,d,something"))
         .toDF("key", "value", "range", "lr", "cw")
         .select("key"))
 
@@ -291,13 +300,13 @@ class SimpleRewriteWithSingleTable extends RewriteQueryByMaterialViewBase {
     assert(plan2.contains(viewPath1))
     checkAnswer(query2.select("key"),
       Seq(
-        (2,"b",11,2,"2,b,something"),
-        (4,"d",11,2,"4,d,something"))
+        (2, "b", 11, 2, "2,b,something"),
+        (4, "d", 11, 2, "4,d,something"))
         .toDF("key", "value", "range", "lr", "cw")
         .select("key"))
   }
 
-  test("query with external or condition will be rewritten by material view"){
+  test("query with external or condition will be rewritten by material view") {
     val sqlText =
       s"""
          |select a.key,value,range,length(range) as lr,concat_ws(',',key,a.value,'something') as cw
@@ -311,9 +320,9 @@ class SimpleRewriteWithSingleTable extends RewriteQueryByMaterialViewBase {
 
     checkAnswer(query.select("key", "value", "range", "lr", "cw"),
       Seq(
-        (1,"a",11,2,"1,a,something"),
-        (3,"c",11,2,"3,c,something"),
-        (4,"d",11,2,"4,d,something"))
+        (1, "a", 11, 2, "1,a,something"),
+        (3, "c", 11, 2, "3,c,something"),
+        (4, "d", 11, 2, "4,d,something"))
         .toDF("key", "value", "range", "lr", "cw"))
 
   }
@@ -374,7 +383,7 @@ class RewriteWithJoinCondition extends RewriteQueryByMaterialViewBase {
 
   }
 
-  test("same query should rewrite - join"){
+  test("same query should rewrite - join") {
     val sqlText =
       s"""
          |select a.key as a_key,a.value a_value,a.range a_range,b.key b_key,b.value b_value,b.range b_range,
@@ -390,12 +399,12 @@ class RewriteWithJoinCondition extends RewriteQueryByMaterialViewBase {
 
     checkAnswer(query.select("a_key", "a_value", "a_range", "b_key", "b_value", "b_range", "lr", "cw"),
       Seq(
-        (3,"c",11,3,"cc",22,2,"3,c,something"))
+        (3, "c", 11, 3, "cc", 22, 2, "3,c,something"))
         .toDF("a_key", "a_value", "a_range", "b_key", "b_value", "b_range", "lr", "cw"))
 
   }
 
-  test("query with external condition should rewrite - join"){
+  test("query with external condition should rewrite - join") {
     val sqlText =
       s"""
          |select a.key as a_key,a.value a_value,a.range a_range,b.key b_key,b.value b_value,b.range b_range,
@@ -411,11 +420,11 @@ class RewriteWithJoinCondition extends RewriteQueryByMaterialViewBase {
 
     checkAnswer(query.select("a_key", "a_value", "a_range", "b_key", "b_value", "b_range", "lr", "cw"),
       Seq(
-        (3,"c",11,3,"cc",22,2,"3,c,something"))
+        (3, "c", 11, 3, "cc", 22, 2, "3,c,something"))
         .toDF("a_key", "a_value", "a_range", "b_key", "b_value", "b_range", "lr", "cw"))
   }
 
-  test("query with less condition should not rewrite - join"){
+  test("query with less condition should not rewrite - join") {
     val sqlText =
       s"""
          |select a.key as a_key,a.value a_value,a.range a_range,b.key b_key,b.value b_value,b.range b_range,
@@ -431,8 +440,7 @@ class RewriteWithJoinCondition extends RewriteQueryByMaterialViewBase {
   }
 
 
-
-  test("same query should rewrite - multi table inner join"){
+  test("same query should rewrite - multi table inner join") {
     val sqlText =
       s"""
          |select a.key as a_key,a.value a_value,a.range a_range,
@@ -451,15 +459,15 @@ class RewriteWithJoinCondition extends RewriteQueryByMaterialViewBase {
     val plan = query.queryExecution.optimizedPlan.toString()
     assert(plan.contains(viewPath5))
 
-    checkAnswer(query.select("a_key", "a_value", "a_range", "b_t1_value","t2_value","b_range"),
+    checkAnswer(query.select("a_key", "a_value", "a_range", "b_t1_value", "t2_value", "b_range"),
       Seq(
-        (1, "a", 11, "aa","a2",22),
-        (1, "a", 11, "aa","a3",33),
-        (3, "c", 11, "cc","c2",22))
-        .toDF("a_key", "a_value", "a_range", "b_t1_value","t2_value","b_range"))
+        (1, "a", 11, "aa", "a2", 22),
+        (1, "a", 11, "aa", "a3", 33),
+        (3, "c", 11, "cc", "c2", 22))
+        .toDF("a_key", "a_value", "a_range", "b_t1_value", "t2_value", "b_range"))
   }
 
-  test("query with external condition in `on` should rewrite - multi table inner join"){
+  test("query with external condition in `on` should rewrite - multi table inner join") {
     val sqlText =
       s"""
          |select a.key as a_key,a.value a_value,a.range a_range,
@@ -478,14 +486,14 @@ class RewriteWithJoinCondition extends RewriteQueryByMaterialViewBase {
     val plan = query.queryExecution.optimizedPlan.toString()
     assert(plan.contains(viewPath5))
 
-    checkAnswer(query.select("a_key", "a_value", "a_range", "b_t1_value","t2_value","b_range"),
+    checkAnswer(query.select("a_key", "a_value", "a_range", "b_t1_value", "t2_value", "b_range"),
       Seq(
-        (1, "a", 11, "aa","a3",33),
-        (3, "c", 11, "cc","c2",22))
-        .toDF("a_key", "a_value", "a_range", "b_t1_value","t2_value","b_range"))
+        (1, "a", 11, "aa", "a3", 33),
+        (3, "c", 11, "cc", "c2", 22))
+        .toDF("a_key", "a_value", "a_range", "b_t1_value", "t2_value", "b_range"))
   }
 
-  test("query with less condition shouldn't rewrite - multi table inner join"){
+  test("query with less condition shouldn't rewrite - multi table inner join") {
     val sqlText =
       s"""
          |select a.key as a_key,a.value a_value,a.range a_range,
@@ -575,7 +583,7 @@ class RewriteWithAggregateCondition extends RewriteQueryByMaterialViewBase {
   }
 
 
-  test("same query should rewrite - aggregate"){
+  test("same query should rewrite - aggregate") {
     val sqlText =
       s"""
          |select a.k1 a_k1,a.k2 a_k2,collect_list(a.value) a_value,max(a.range) a_range
@@ -590,15 +598,15 @@ class RewriteWithAggregateCondition extends RewriteQueryByMaterialViewBase {
 
     checkAnswer(query.select("a_k1", "a_k2", "a_value", "a_range"),
       Seq(
-        (3, "c", List("c2"),22),
-        (4, "d", List("d3"),33),
-        (5, "e", List("e2","e3"),33),
-        (6, "f", List("f2","f3"),33))
+        (3, "c", List("c2"), 22),
+        (4, "d", List("d3"), 33),
+        (5, "e", List("e2", "e3"), 33),
+        (6, "f", List("f2", "f3"), 33))
         .toDF("a_k1", "a_k2", "a_value", "a_range"))
 
   }
 
-  test("query with external having condition should rewrite - aggregate"){
+  test("query with external having condition should rewrite - aggregate") {
     val sqlText =
       s"""
          |select a.k1 a_k1,a.k2 a_k2,collect_list(a.value) a_value,max(a.range) a_range
@@ -613,11 +621,11 @@ class RewriteWithAggregateCondition extends RewriteQueryByMaterialViewBase {
 
     checkAnswer(query.select("a_k1", "a_k2", "a_value", "a_range"),
       Seq(
-        (4, "d", List("d3"),33))
+        (4, "d", List("d3"), 33))
         .toDF("a_k1", "a_k2", "a_value", "a_range"))
   }
 
-  test("query with external condition under aggregate shouldn't rewrite - aggregate"){
+  test("query with external condition under aggregate shouldn't rewrite - aggregate") {
     val sqlText =
       s"""
          |select a.k1 a_k1,a.k2 a_k2,collect_list(a.value) a_value,max(a.range) a_range
@@ -631,7 +639,7 @@ class RewriteWithAggregateCondition extends RewriteQueryByMaterialViewBase {
     assert(!plan.contains(viewPath3))
   }
 
-  test("same query should rewrite - aggregate & left join"){
+  test("same query should rewrite - aggregate & left join") {
     val sqlText =
       s"""
          |select a.key as a_key,max(a.value) a_value,last(a.range) a_range,min(b.value) b_value
@@ -653,7 +661,7 @@ class RewriteWithAggregateCondition extends RewriteQueryByMaterialViewBase {
         .toDF("a_key", "a_value", "a_range", "b_value"))
   }
 
-  test("query with external having condition should rewrite - aggregate & left join"){
+  test("query with external having condition should rewrite - aggregate & left join") {
     val sqlText =
       s"""
          |select a.key as a_key,max(a.value) a_value,last(a.range) a_range,min(b.value) b_value
@@ -674,7 +682,7 @@ class RewriteWithAggregateCondition extends RewriteQueryByMaterialViewBase {
   }
 
 
-  test("query with external condition under aggregate shouldn't rewrite - aggregate & left join"){
+  test("query with external condition under aggregate shouldn't rewrite - aggregate & left join") {
     val sqlText =
       s"""
          |select a.key as a_key,max(a.value) a_value,last(a.range) a_range,min(b.value) b_value
@@ -689,7 +697,7 @@ class RewriteWithAggregateCondition extends RewriteQueryByMaterialViewBase {
     assert(!plan.contains(viewPath4))
   }
 
-  test("query with external join condition under aggregate shouldn't rewrite - aggregate & left join"){
+  test("query with external join condition under aggregate shouldn't rewrite - aggregate & left join") {
     val sqlText =
       s"""
          |select a.key as a_key,max(a.value) a_value,last(a.range) a_range,min(b.value) b_value
@@ -705,7 +713,7 @@ class RewriteWithAggregateCondition extends RewriteQueryByMaterialViewBase {
   }
 
 
-  test("same query should rewrite - aggregate & multi join"){
+  test("same query should rewrite - aggregate & multi join") {
     val sqlText =
       s"""
          |select max(a.key) as a_key,min(a.value) a_value,first(a.range) a_range,
@@ -721,14 +729,14 @@ class RewriteWithAggregateCondition extends RewriteQueryByMaterialViewBase {
     val plan = query.queryExecution.optimizedPlan.toString()
     assert(plan.contains(viewPath6))
 
-    checkAnswer(query.select("a_key", "a_value", "a_range", "b_value","b_range","k1", "k2","c_value","c_range"),
+    checkAnswer(query.select("a_key", "a_value", "a_range", "b_value", "b_range", "k1", "k2", "c_value", "c_range"),
       Seq(
-        (1, "a", 11, "aa",22,1,"a",List("a3","a2"),List(33,22)),
-        (3, "c", 11, "cc",22,3,"c",List("c2"),List(22)))
-        .toDF("a_key", "a_value", "a_range", "b_value","b_range","k1", "k2","c_value","c_range"))
+        (1, "a", 11, "aa", 22, 1, "a", List("a3", "a2"), List(33, 22)),
+        (3, "c", 11, "cc", 22, 3, "c", List("c2"), List(22)))
+        .toDF("a_key", "a_value", "a_range", "b_value", "b_range", "k1", "k2", "c_value", "c_range"))
   }
 
-  test("query with having condition should rewrite - aggregate & multi join"){
+  test("query with having condition should rewrite - aggregate & multi join") {
     val sqlText =
       s"""
          |select max(a.key) as a_key,min(a.value) a_value,first(a.range) a_range,
@@ -745,14 +753,14 @@ class RewriteWithAggregateCondition extends RewriteQueryByMaterialViewBase {
     val plan = query.queryExecution.optimizedPlan.toString()
     assert(plan.contains(viewPath6))
 
-    checkAnswer(query.select("a_key", "a_value", "a_range", "b_value","b_range","k1", "k2","c_value","c_range"),
+    checkAnswer(query.select("a_key", "a_value", "a_range", "b_value", "b_range", "k1", "k2", "c_value", "c_range"),
       Seq(
-        (3, "c", 11, "cc",22,3,"c",List("c2"),List(22)))
-        .toDF("a_key", "a_value", "a_range", "b_value","b_range","k1", "k2","c_value","c_range"))
+        (3, "c", 11, "cc", 22, 3, "c", List("c2"), List(22)))
+        .toDF("a_key", "a_value", "a_range", "b_value", "b_range", "k1", "k2", "c_value", "c_range"))
   }
 
 
-  test("query with external condition under aggregate shouldn't rewrite - aggregate & multi join"){
+  test("query with external condition under aggregate shouldn't rewrite - aggregate & multi join") {
     val sqlText =
       s"""
          |select max(a.key) as a_key,min(a.value) a_value,first(a.range) a_range,
@@ -771,11 +779,9 @@ class RewriteWithAggregateCondition extends RewriteQueryByMaterialViewBase {
 }
 
 
-
 class RewriteWithOrCondition extends RewriteQueryByMaterialViewBase {
 
   import testImplicits._
-
 
 
   val viewName7: String = "material_view7"
@@ -819,7 +825,7 @@ class RewriteWithOrCondition extends RewriteQueryByMaterialViewBase {
 
   }
 
-  test("same query should rewrite - or"){
+  test("same query should rewrite - or") {
     val sqlText =
       s"""
          |select a.k1,k2,value,range,length(range) as lr,concat_ws(',',k1,k2,a.value) as cw
@@ -832,17 +838,17 @@ class RewriteWithOrCondition extends RewriteQueryByMaterialViewBase {
     val plan = query.queryExecution.optimizedPlan.toString()
     assert(plan.contains(viewPath7))
 
-    checkAnswer(query.select("k1", "k2", "value", "range","lr","cw"),
+    checkAnswer(query.select("k1", "k2", "value", "range", "lr", "cw"),
       Seq(
         (3, "c", "c2", 22, 2, "3,c,c2"),
         (4, "d", "d3", 33, 2, "4,d,d3"),
         (5, "e", "e2", 22, 2, "5,e,e2"),
         (5, "e", "e3", 33, 2, "5,e,e3"),
         (6, "f", "f3", 33, 2, "6,f,f3"))
-        .toDF("k1", "k2", "value", "range","lr","cw"))
+        .toDF("k1", "k2", "value", "range", "lr", "cw"))
   }
 
-  test("query with less or condition should rewrite - or"){
+  test("query with less or condition should rewrite - or") {
     val sqlText =
       s"""
          |select a.k1,k2,value,range,length(range) as lr,concat_ws(',',k1,k2,a.value) as cw
@@ -855,17 +861,17 @@ class RewriteWithOrCondition extends RewriteQueryByMaterialViewBase {
     val plan = query.queryExecution.optimizedPlan.toString()
     assert(plan.contains(viewPath7))
 
-    checkAnswer(query.select("k1", "k2", "value", "range","lr","cw"),
+    checkAnswer(query.select("k1", "k2", "value", "range", "lr", "cw"),
       Seq(
         (4, "d", "d3", 33, 2, "4,d,d3"),
         (5, "e", "e2", 22, 2, "5,e,e2"),
         (5, "e", "e3", 33, 2, "5,e,e3"),
         (6, "f", "f3", 33, 2, "6,f,f3"))
-        .toDF("k1", "k2", "value", "range","lr","cw"))
+        .toDF("k1", "k2", "value", "range", "lr", "cw"))
   }
 
 
-  test("query with or condition inbounds should rewrite - or"){
+  test("query with or condition inbounds should rewrite - or") {
     val sqlText =
       s"""
          |select a.k1,k2,value,range,length(range) as lr,concat_ws(',',k1,k2,a.value) as cw
@@ -878,14 +884,14 @@ class RewriteWithOrCondition extends RewriteQueryByMaterialViewBase {
     val plan = query.queryExecution.optimizedPlan.toString()
     assert(plan.contains(viewPath7))
 
-    checkAnswer(query.select("k1", "k2", "value", "range","lr","cw"),
+    checkAnswer(query.select("k1", "k2", "value", "range", "lr", "cw"),
       Seq(
         (5, "e", "e3", 33, 2, "5,e,e3"))
-        .toDF("k1", "k2", "value", "range","lr","cw"))
+        .toDF("k1", "k2", "value", "range", "lr", "cw"))
   }
 
 
-  test("query without or condition inbounds should rewrite - or"){
+  test("query without or condition inbounds should rewrite - or") {
     val sqlText =
       s"""
          |select a.k1,k2,value,range,length(range) as lr,concat_ws(',',k1,k2,a.value) as cw
@@ -898,17 +904,16 @@ class RewriteWithOrCondition extends RewriteQueryByMaterialViewBase {
     val plan = query.queryExecution.optimizedPlan.toString()
     assert(plan.contains(viewPath7))
 
-    checkAnswer(query.select("k1", "k2", "value", "range","lr","cw"),
+    checkAnswer(query.select("k1", "k2", "value", "range", "lr", "cw"),
       Seq(
         (4, "d", "d3", 33, 2, "4,d,d3"),
         (5, "e", "e3", 33, 2, "5,e,e3"),
         (6, "f", "f3", 33, 2, "6,f,f3"))
-        .toDF("k1", "k2", "value", "range","lr","cw"))
+        .toDF("k1", "k2", "value", "range", "lr", "cw"))
   }
 
 
-
-  test("query without or condition inbounds should rewrite (equal replace range) - or"){
+  test("query without or condition inbounds should rewrite (equal replace range) - or") {
     val sqlText =
       s"""
          |select a.k1,k2,value,range,length(range) as lr,concat_ws(',',k1,k2,a.value) as cw
@@ -921,15 +926,14 @@ class RewriteWithOrCondition extends RewriteQueryByMaterialViewBase {
     val plan = query.queryExecution.optimizedPlan.toString()
     assert(plan.contains(viewPath7))
 
-    checkAnswer(query.select("k1", "k2", "value", "range","lr","cw"),
+    checkAnswer(query.select("k1", "k2", "value", "range", "lr", "cw"),
       Seq(
         (4, "d", "d3", 33, 2, "4,d,d3"))
-        .toDF("k1", "k2", "value", "range","lr","cw"))
+        .toDF("k1", "k2", "value", "range", "lr", "cw"))
   }
 
 
-
-  test("query with more or condition shouldn't rewrite - or"){
+  test("query with more or condition shouldn't rewrite - or") {
     val sqlText =
       s"""
          |select a.k1,k2,value,range,length(range) as lr,concat_ws(',',k1,k2,a.value) as cw
@@ -944,7 +948,7 @@ class RewriteWithOrCondition extends RewriteQueryByMaterialViewBase {
     assert(!plan.contains(viewPath7))
   }
 
-  test("query with or condition not inbounds shouldn't rewrite - or"){
+  test("query with or condition not inbounds shouldn't rewrite - or") {
     val sqlText =
       s"""
          |select a.k1,k2,value,range,length(range) as lr,concat_ws(',',k1,k2,a.value) as cw
@@ -959,7 +963,7 @@ class RewriteWithOrCondition extends RewriteQueryByMaterialViewBase {
   }
 
 
-  test("query without or condition not inbounds shouldn't rewrite - or"){
+  test("query without or condition not inbounds shouldn't rewrite - or") {
     val sqlText =
       s"""
          |select a.k1,k2,value,range,length(range) as lr,concat_ws(',',k1,k2,a.value) as cw
@@ -974,7 +978,7 @@ class RewriteWithOrCondition extends RewriteQueryByMaterialViewBase {
   }
 
 
-  test("query without condition shouldn't rewrite - or"){
+  test("query without condition shouldn't rewrite - or") {
     val sqlText =
       s"""
          |select a.k1,k2,value,range,length(range) as lr,concat_ws(',',k1,k2,a.value) as cw
@@ -988,7 +992,7 @@ class RewriteWithOrCondition extends RewriteQueryByMaterialViewBase {
   }
 
 
-  test("same query should rewrite - or & and"){
+  test("same query should rewrite - or & and") {
     val sqlText =
       s"""
          |select a.k1,k2,value,range,length(range) as lr,concat_ws(',',k1,k2,a.value) as cw
@@ -1001,7 +1005,7 @@ class RewriteWithOrCondition extends RewriteQueryByMaterialViewBase {
     val plan = query.queryExecution.optimizedPlan.toString()
     assert(plan.contains(viewPath8))
 
-    checkAnswer(query.select("k1", "k2", "value", "range","lr","cw"),
+    checkAnswer(query.select("k1", "k2", "value", "range", "lr", "cw"),
       Seq(
         (1, "a", "a2", 22, 2, "1,a,a2"),
         (1, "a", "a3", 33, 2, "1,a,a3"),
@@ -1009,13 +1013,12 @@ class RewriteWithOrCondition extends RewriteQueryByMaterialViewBase {
         (4, "d", "d3", 33, 2, "4,d,d3"),
         (5, "e", "e3", 33, 2, "5,e,e3"),
         (6, "f", "f3", 33, 2, "6,f,f3"))
-        .toDF("k1", "k2", "value", "range","lr","cw"))
+        .toDF("k1", "k2", "value", "range", "lr", "cw"))
 
   }
 
 
-
-  test("query with external condition should rewrite - or & and"){
+  test("query with external condition should rewrite - or & and") {
     val sqlText =
       s"""
          |select a.k1,k2,value,range,length(range) as lr,concat_ws(',',k1,k2,a.value) as cw
@@ -1028,16 +1031,16 @@ class RewriteWithOrCondition extends RewriteQueryByMaterialViewBase {
     val plan = query.queryExecution.optimizedPlan.toString()
     assert(plan.contains(viewPath8))
 
-    checkAnswer(query.select("k1", "k2", "value", "range","lr","cw"),
+    checkAnswer(query.select("k1", "k2", "value", "range", "lr", "cw"),
       Seq(
         (1, "a", "a2", 22, 2, "1,a,a2"),
         (1, "a", "a3", 33, 2, "1,a,a3"),
         (3, "c", "c2", 22, 2, "3,c,c2"))
-        .toDF("k1", "k2", "value", "range","lr","cw"))
+        .toDF("k1", "k2", "value", "range", "lr", "cw"))
   }
 
 
-  test("query without or condition inbounds should rewrite - or & and"){
+  test("query without or condition inbounds should rewrite - or & and") {
     val sqlText =
       s"""
          |select a.k1,k2,value,range,length(range) as lr,concat_ws(',',k1,k2,a.value) as cw
@@ -1050,15 +1053,15 @@ class RewriteWithOrCondition extends RewriteQueryByMaterialViewBase {
     val plan = query.queryExecution.optimizedPlan.toString()
     assert(plan.contains(viewPath8))
 
-    checkAnswer(query.select("k1", "k2", "value", "range","lr","cw"),
+    checkAnswer(query.select("k1", "k2", "value", "range", "lr", "cw"),
       Seq(
         (1, "a", "a2", 22, 2, "1,a,a2"),
         (1, "a", "a3", 33, 2, "1,a,a3"))
-        .toDF("k1", "k2", "value", "range","lr","cw"))
+        .toDF("k1", "k2", "value", "range", "lr", "cw"))
 
   }
 
-  test("query with or condition not inbounds shouldn't rewrite - or & and"){
+  test("query with or condition not inbounds shouldn't rewrite - or & and") {
     val sqlText =
       s"""
          |select a.k1,k2,value,range,length(range) as lr,concat_ws(',',k1,k2,a.value) as cw
@@ -1073,7 +1076,7 @@ class RewriteWithOrCondition extends RewriteQueryByMaterialViewBase {
 
   }
 
-  test("query without or condition not inbounds shouldn't rewrite - or & and"){
+  test("query without or condition not inbounds shouldn't rewrite - or & and") {
     val sqlText =
       s"""
          |select a.k1,k2,value,range,length(range) as lr,concat_ws(',',k1,k2,a.value) as cw
@@ -1089,7 +1092,7 @@ class RewriteWithOrCondition extends RewriteQueryByMaterialViewBase {
   }
 
 
-  test("query without condition shouldn't rewrite - or & and"){
+  test("query without condition shouldn't rewrite - or & and") {
     val sqlText =
       s"""
          |select a.k1,k2,value,range,length(range) as lr,concat_ws(',',k1,k2,a.value) as cw
@@ -1104,7 +1107,7 @@ class RewriteWithOrCondition extends RewriteQueryByMaterialViewBase {
 
   }
 
-  test("query without or condition (just and condition) shouldn't rewrite - or & and"){
+  test("query without or condition (just and condition) shouldn't rewrite - or & and") {
     val sqlText =
       s"""
          |select a.k1,k2,value,range,length(range) as lr,concat_ws(',',k1,k2,a.value) as cw
@@ -1118,8 +1121,6 @@ class RewriteWithOrCondition extends RewriteQueryByMaterialViewBase {
     assert(!plan.contains(viewPath8))
 
   }
-
-
 
 
 }
