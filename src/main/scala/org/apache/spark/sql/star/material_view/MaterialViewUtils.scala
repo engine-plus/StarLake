@@ -55,9 +55,6 @@ object MaterialViewUtils extends PredicateHelper {
           case as: Alias => constructInfo.addOutputInfo(as.qualifiedName, as.child.sql)
         }
 
-
-
-
       //fast failed when parsing unsupported query
       case a: LogicalPlan => throw StarLakeErrors.unsupportedLogicalPlanWhileRewriteQueryException(a.toString())
 
@@ -91,6 +88,7 @@ object MaterialViewUtils extends PredicateHelper {
 
 
     plan match {
+        //fast failed
       case e: Range =>
         throw StarLakeErrors.canNotCreateMaterialViewOrRewriteQueryException(s"unsupport plan ${e.toString()}")
 

@@ -36,7 +36,6 @@ class ConstructQueryInfo extends ConstructProperties{
   private var firstConstruct: Boolean = true
 
   private val outputInfo: mutable.Map[String, String] = mutable.Map[String, String]()
-  //  private val equalInfo: mutable.Map[String, mutable.Set[String]] = mutable.Map[String, mutable.Set[String]]()
 
   //equal info of different columns, such as a.key=b.key
   private val columnEqualInfo: ArrayBuffer[(String, String)] = new ArrayBuffer[(String, String)]()
@@ -47,17 +46,11 @@ class ConstructQueryInfo extends ConstructProperties{
   //or info of conditions, such as: a.key=1 or (a.key=2 and a.value>5)
   private val conditionOrInfo: ArrayBuffer[OrInfo] = new ArrayBuffer[OrInfo]()
 
-  //  private val conditionInfo: ArrayBuffer[String] = new ArrayBuffer[String]()
-  //  private val joinInfo: ArrayBuffer[String] = new ArrayBuffer[String]()
-  //  private val aggregateInfo: ArrayBuffer[String] = new ArrayBuffer[String]()
   private val tableInfo: mutable.Map[String, String] = mutable.Map[String, String]()
   private val columnAsInfo: mutable.Map[String, String] = mutable.Map[String, String]()
   private val rangeInfo: mutable.Map[String, RangeInfo] = mutable.Map[String, RangeInfo]()
   private val otherInfo: ArrayBuffer[String] = new ArrayBuffer[String]()
 
-  //  private var joinType: Option[String] = _
-  //  private var joinEqualConditions: ArrayBuffer[(String, String)] = _
-  //  private var joinOtherConditions: ArrayBuffer[String] = new ArrayBuffer[String]()
   private val joinInfo: ArrayBuffer[JoinDetail] = new ArrayBuffer[JoinDetail]()
   private val aggregateInfo: AggregateInfo = new AggregateInfo()
 
@@ -127,21 +120,6 @@ class ConstructQueryInfo extends ConstructProperties{
     assert(firstConstruct, "It has been built before, you can't build query info more than once")
     firstConstruct = false
 
-//    //compute relation tables
-//    val relationTables = tableInfo.values.filter(f => f.startsWith("star.`"))
-//      .map(m => {
-//
-//        val pathOrName = m.split(".").last.replace("`", "")
-//        val (isShortName, tablePath) = MetaVersion.isShortTableNameExists(pathOrName)
-//        val tableName = if (isShortName){
-//          tablePath
-//        }else{
-//          SnapshotManagement(pathOrName).table_name
-//        }
-//
-//
-//      })
-
     //matching final star table
     val tables = tableInfo.keys
       .filter(f => !f.startsWith("star.`"))
@@ -176,9 +154,6 @@ class ConstructQueryInfo extends ConstructProperties{
       m._1 -> value
     })
 
-    //build a map to replace condition string
-    //    val asInfo = columnAsInfoNew.filter(f => f._1.contains(".`"))
-
     val outputInfoNew = outputInfo.map(m => {
       //replace temp table to final star table
       val formatName = replaceByTableInfo(tables, m._2)
@@ -196,8 +171,6 @@ class ConstructQueryInfo extends ConstructProperties{
 
 
     val columnEqualInfoTmp = columnEqualInfo.map(m => {
-//      val key = replaceByColumnAsInfo(columnAsInfoNew, replaceByTableInfo(tables, m._1))
-//      val value = replaceByColumnAsInfo(columnAsInfoNew, replaceByTableInfo(tables, m._2))
       val key = getFinalStringByReplace(m._1, tables, columnAsInfoNew)
       val value = getFinalStringByReplace(m._2, tables, columnAsInfoNew)
       (key, value)

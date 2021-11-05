@@ -124,7 +124,17 @@ object OrInfo {
 
             //orInfo
             if (matching) {
-              matching = inbounds(qod.conditionOrInfo, vod.conditionOrInfo)
+              val childQueryOrInfo =
+                if (qod.conditionOrInfo.isEmpty && vod.conditionOrInfo.nonEmpty) {
+                  Seq(OrDetail(
+                    qod.rangeInfo,
+                    qod.conditionEqualInfo,
+                    qod.conditionOrInfo,
+                    qod.otherInfo))
+                } else {
+                  qod.conditionOrInfo
+                }
+              matching = inbounds(childQueryOrInfo, vod.conditionOrInfo)
             }
 
             matching
