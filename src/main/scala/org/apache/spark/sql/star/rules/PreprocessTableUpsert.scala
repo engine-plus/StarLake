@@ -18,9 +18,10 @@ package org.apache.spark.sql.star.rules
 
 import org.apache.spark.sql.catalyst.analysis.EliminateSubqueryAliases
 import org.apache.spark.sql.catalyst.expressions.aggregate.AggregateExpression
-import org.apache.spark.sql.catalyst.expressions.{Expression, SubqueryExpression}
+import org.apache.spark.sql.catalyst.expressions.{Literal, SubqueryExpression}
 import org.apache.spark.sql.catalyst.plans.logical._
 import org.apache.spark.sql.catalyst.rules.Rule
+import org.apache.spark.sql.functions.expr
 import org.apache.spark.sql.internal.SQLConf
 import org.apache.spark.sql.star.commands.UpsertCommand
 import org.apache.spark.sql.star.exception.StarLakeErrors
@@ -36,7 +37,12 @@ case class PreprocessTableUpsert(sqlConf: SQLConf)
   def apply(upsert: StarUpsert): UpsertCommand = {
     val StarUpsert(target, source, condition, migratedSchema) = upsert
 
-    def checkCondition(cond: Expression, conditionName: String): Unit = {
+    def checkCondition(conditionString: String, conditionName: String): Unit = {
+      val cond = conditionString match {
+        case "" => Literal(true)
+        case _ => expr(conditionString).expr
+      }
+
       if (!cond.deterministic) {
         throw StarLakeErrors.nonDeterministicNotSupportedException(
           s"$conditionName condition of UPSERT operation", cond)

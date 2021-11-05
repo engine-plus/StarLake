@@ -393,5 +393,27 @@ class ParquetScanSuite extends QueryTest
     }
   }
 
+  test("read multi partition by MergeSingletonFile") {
+    withSQLConf(StarLakeSQLConf.BUCKET_SCAN_MULTI_PARTITION_ENABLE.key -> "true") {
+      withTempDir(dir => {
+        val tablePath = dir.getCanonicalPath
+        Seq((20201101, 1, 1), (20201102, 2, 2), (20201101, 3, 3), (20201103, 1, 1))
+          .toDF("range", "hash", "value")
+          .write
+          .option("rangePartitions", "range")
+          .option("hashPartitions", "hash")
+          .option("hashBucketNum", "1")
+          .format("star")
+          .save(tablePath)
+
+        val table = StarTable.forPath(tablePath)
+        checkAnswer(table.toDF.filter("value >= 3").select("range", "hash", "value"),
+          Seq((20201101, 3, 3))
+            .toDF("range", "hash", "value"))
+
+      })
+    }
+  }
+
 
 }

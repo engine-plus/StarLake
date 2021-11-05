@@ -27,14 +27,14 @@ class MergeColumnarBatchNew(columns: Array[ColumnVector],
 
   val row = new MergeOperatorColumnarBatchRow(columns, mergeOps, indexTypeArray)
 
-  def getRow(resultScheme: Seq[Seq[(Int, Int)]]): InternalRow = {
-    row.idMix = resultScheme
+  def getRow(resultIndex: Seq[Seq[(Int, Int)]]): InternalRow = {
+    row.idMix = resultIndex
     row.mergeValues()
     row
   }
 
-  def getMergeRow(resultScheme: Seq[Seq[(Int, Int)]]): MergeOperatorColumnarBatchRow = {
-    row.idMix = resultScheme
+  def getMergeRow(resultIndex: Seq[Seq[(Int, Int)]]): MergeOperatorColumnarBatchRow = {
+    row.idMix = resultIndex
     row.mergeValues()
     row
   }

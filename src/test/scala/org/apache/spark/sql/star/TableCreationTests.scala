@@ -1145,52 +1145,207 @@ trait TableCreationTests
   }
 
   test("CREATE TABLE with existing data path") {
-    withTempPath { path =>
-      withTable("src", "t1", "t2", "t3", "t4", "t5", "t6") {
-        sql("CREATE TABLE src(i int, p string) USING star PARTITIONED BY (p) " +
-          s"LOCATION '${path.getAbsolutePath}'")
-        sql("INSERT INTO src SELECT 1, 'a'")
-
-        // CREATE TABLE without specifying anything works
-        sql(s"CREATE TABLE t1 USING star LOCATION '${path.getAbsolutePath}'")
-        checkAnswer(spark.table("t1"), Row(1, "a"))
-
-        // CREATE TABLE with the same schema but no partitioning fails.
-        val e0 = intercept[AnalysisException] {
-          sql(s"CREATE TABLE t3(i int, p string) USING star LOCATION '${path.getAbsolutePath}'")
-        }
-        //        assert(e0.message.contains("The specified partitioning does not match the existing"))
-        assert(e0.message.contains("The specified schema does not match the existing schema"))
-
-        // CREATE TABLE with different schema fails
-        val e1 = intercept[AnalysisException] {
-          sql(s"CREATE TABLE t4(j int, p string) USING star LOCATION '${path.getAbsolutePath}'")
-        }
-        assert(e1.message.contains("The specified schema does not match the existing"))
-
-        // CREATE TABLE with different partitioning fails
-        val e2 = intercept[AnalysisException] {
-          sql(s"CREATE TABLE t5(i int, p string) USING star PARTITIONED BY (i) " +
+    withTable("src") {
+      withTempPath { path =>
+        withTable("src", "t1", "t2", "t3", "t4", "t5", "t6") {
+          sql("CREATE TABLE src(i int, p string) USING star PARTITIONED BY (p) " +
             s"LOCATION '${path.getAbsolutePath}'")
+          sql("INSERT INTO src SELECT 1, 'a'")
+
+
+          checkAnswer(spark.sql("select i,p from src"), Row(1, "a"))
+          checkAnswer(spark.sql("select i,p from star.src"), Row(1, "a"))
+
+          // CREATE TABLE without specifying anything works
+          val e0 = intercept[AssertionError] {
+            sql(s"CREATE TABLE t1 USING star LOCATION '${path.getAbsolutePath}'")
+          }
+          assert(e0.getMessage.contains("already has a short name `src`, you can't change it to `t1`"))
+
+          val e1 = intercept[AnalysisException] {
+            sql(s"CREATE TABLE src USING star LOCATION '${path.getAbsolutePath}'")
+          }
+          assert(e1.getMessage.contains("Table default.src already exists"))
+
+          Seq((2, "b")).toDF("i", "p")
+            .write
+            .mode("append")
+            .format("star")
+            .option(StarLakeOptions.SHORT_TABLE_NAME, "src")
+            .save(path.getAbsolutePath)
+          checkAnswer(sql("select i,p from star.src"), Seq((1, "a"), (2, "b")).toDF("i", "p"))
+
+          val e2 = intercept[AssertionError] {
+            Seq((2, "b")).toDF("i", "p")
+              .write
+              .mode("append")
+              .format("star")
+              .option(StarLakeOptions.SHORT_TABLE_NAME, "t1")
+              .save(path.getAbsolutePath)
+          }
+          assert(e2.getMessage.contains("already has a short name `src`, you can't change it to `t1`"))
         }
-        assert(e2.message.contains("The specified schema does not match the existing schema"))
-        //        assert(e2.message.contains("The specified partitioning does not match the existing"))
       }
     }
   }
 
   test("CREATE TABLE on existing data should not commit metadata") {
-    withTempDir { tempDir =>
-      val path = tempDir.getCanonicalPath()
-      val df = Seq(1, 2, 3, 4, 5).toDF()
-      df.write.format("star").save(path)
-      val snapshotManagement = getSnapshotManagement(new Path(path))
+    withTable("table") {
+      withTempDir { tempDir =>
+        val path = tempDir.getCanonicalPath
+        val df = Seq(1, 2, 3, 4, 5).toDF()
+        df.write.format("star").save(path)
+        val snapshotManagement = getSnapshotManagement(new Path(path))
 
-      val oldVersion = snapshotManagement.snapshot.getPartitionInfoArray.map(_.read_version).max
-      sql(s"CREATE TABLE table USING star LOCATION '$path'")
-      assert(oldVersion == snapshotManagement.snapshot.getPartitionInfoArray.map(_.read_version).max)
+        val oldVersion = snapshotManagement.snapshot.getPartitionInfoArray.map(_.read_version).max
+        sql(s"CREATE TABLE table USING star LOCATION '$path'")
+        assert(oldVersion == snapshotManagement.snapshot.getPartitionInfoArray.map(_.read_version).max)
+      }
     }
   }
+
+  test("create table with short name") {
+    withTable("tt") {
+      withTempDir(dir => {
+        val path = dir.getCanonicalPath
+        Seq((1, "a"), (2, "b")).toDF("i", "p")
+          .write
+          .mode("overwrite")
+          .format("star")
+          .option(StarLakeOptions.SHORT_TABLE_NAME, "tt")
+          .save(path)
+
+        val shortName = SnapshotManagement(path).snapshot.getTableInfo.short_table_name
+        assert(shortName.isDefined && shortName.get.equals("tt"))
+
+        checkAnswer(sql("select i,p from star.tt"), Seq((1, "a"), (2, "b")).toDF("i", "p"))
+        checkAnswer(StarTable.forName("tt").toDF.select("i", "p"),
+          Seq((1, "a"), (2, "b")).toDF("i", "p"))
+
+
+      })
+    }
+  }
+
+  test("create table without short name and then set by sql") {
+    withTable("tt") {
+      withTempDir(dir => {
+        val path = dir.getCanonicalPath
+        Seq((1, "a"), (2, "b")).toDF("i", "p")
+          .write
+          .mode("overwrite")
+          .format("star")
+          .save(path)
+
+        val sm = SnapshotManagement(path)
+
+        var shortName = sm.snapshot.getTableInfo.short_table_name
+        assert(shortName.isEmpty)
+
+        sql(s"create table tt using star location '$path'")
+        shortName = sm.updateSnapshot().getTableInfo.short_table_name
+        assert(shortName.isDefined && shortName.get.equals("tt"))
+
+        checkAnswer(sql("select i,p from star.tt"), Seq((1, "a"), (2, "b")).toDF("i", "p"))
+        checkAnswer(StarTable.forName("tt").toDF.select("i", "p"),
+          Seq((1, "a"), (2, "b")).toDF("i", "p"))
+        checkAnswer(spark.table("tt").select("i", "p"),
+          Seq((1, "a"), (2, "b")).toDF("i", "p"))
+
+        sql("insert into tt (i,p) values(3,'c')")
+        checkAnswer(spark.table("tt").select("i", "p"),
+          Seq((1, "a"), (2, "b"), (3, "c")).toDF("i", "p"))
+        checkAnswer(sql("select i,p from star.tt"), Seq((1, "a"), (2, "b"), (3, "c")).toDF("i", "p"))
+        checkAnswer(StarTable.forName("tt").toDF.select("i", "p"),
+          Seq((1, "a"), (2, "b"), (3, "c")).toDF("i", "p"))
+
+
+        sql("insert into star.tt (i,p) values(4,'d')")
+        checkAnswer(spark.table("tt").select("i", "p"),
+          Seq((1, "a"), (2, "b"), (3, "c"), (4, "d")).toDF("i", "p"))
+        checkAnswer(sql("select i,p from star.tt"), Seq((1, "a"), (2, "b"), (3, "c"), (4, "d")).toDF("i", "p"))
+        checkAnswer(StarTable.forName("tt").toDF.select("i", "p"),
+          Seq((1, "a"), (2, "b"), (3, "c"), (4, "d")).toDF("i", "p"))
+
+      })
+    }
+  }
+
+  test("drop spark catalog table will not drop star table") {
+    withTable("tt") {
+      withTempDir(dir => {
+        val path = dir.getCanonicalPath
+        Seq((1, "a"), (2, "b")).toDF("i", "p").createOrReplaceTempView("tmp")
+        sql(s"create table tt using star location '$path' as select i,p from tmp")
+
+        sql("drop table tt")
+        checkAnswer(sql("select i,p from star.tt"), Seq((1, "a"), (2, "b")).toDF("i", "p"))
+        checkAnswer(StarTable.forName("tt").toDF.select("i", "p"),
+          Seq((1, "a"), (2, "b")).toDF("i", "p"))
+        val e = intercept[Exception] {
+          checkAnswer(spark.table("tt").select("i", "p"),
+            Seq((1, "a"), (2, "b")).toDF("i", "p"))
+        }
+        assert(e.getMessage().contains("Table or view not found: tt"))
+      })
+    }
+  }
+
+  test("drop star table will drop spark table") {
+    withTable("tt") {
+      withTempDir(dir => {
+        val path = dir.getCanonicalPath
+        Seq((1, "a"), (2, "b")).toDF("i", "p").createOrReplaceTempView("tmp")
+        sql(s"create table tt using star location '$path' as select i,p from tmp")
+        checkAnswer(sql("select i,p from star.tt"), Seq((1, "a"), (2, "b")).toDF("i", "p"))
+
+        sql("drop table star.tt")
+        val e1 = intercept[AnalysisException] {
+          checkAnswer(StarTable.forName("tt").toDF.select("i", "p"),
+            Seq((1, "a"), (2, "b")).toDF("i", "p"))
+        }
+        assert(e1.getMessage().contains("is not an Star table"))
+
+        val e2 = intercept[Exception] {
+          checkAnswer(spark.table("tt").select("i", "p"),
+            Seq((1, "a"), (2, "b")).toDF("i", "p"))
+        }
+      })
+    }
+  }
+
+
+  test("create table without short name and then set by option") {
+    withTable("tt") {
+      withTempDir(dir => {
+        val path = dir.getCanonicalPath
+        Seq((1, "a"), (2, "b")).toDF("i", "p")
+          .write
+          .mode("overwrite")
+          .format("star")
+          .save(path)
+
+        val sm = SnapshotManagement(path)
+
+        var shortName = sm.snapshot.getTableInfo.short_table_name
+        assert(shortName.isEmpty)
+
+        Seq((3, "c")).toDF("i", "p")
+          .write
+          .mode("append")
+          .format("star")
+          .option(StarLakeOptions.SHORT_TABLE_NAME, "tt")
+          .save(path)
+        shortName = sm.updateSnapshot().getTableInfo.short_table_name
+        assert(shortName.isDefined && shortName.get.equals("tt"))
+
+        checkAnswer(sql("select i,p from star.tt"), Seq((1, "a"), (2, "b"), (3, "c")).toDF("i", "p"))
+
+      })
+    }
+  }
+
+
 }
 
 class TableCreationSuite

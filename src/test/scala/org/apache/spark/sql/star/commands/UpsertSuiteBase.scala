@@ -157,8 +157,6 @@ class UpsertSuiteBase extends QueryTest
       None,
       Row(20201101, 1, 11) :: Row(20201101, 2, 2) :: Row(20201101, 3, 33) :: Row(20201101, 4, 44) :: Row(20201102, 4, 4) :: Nil,
       Seq("range", "hash", "value"))
-
-
   }
 
 
@@ -179,6 +177,42 @@ class UpsertSuiteBase extends QueryTest
     }
   }
 
+
+  test("merge one file with empty batch") {
+    initTable(
+      Seq((20201101, 1, 1), (20201101, 2, 2), (20201102, 3, 3), (20201102, 4, 4))
+        .toDF("range", "hash", "value"),
+      "range",
+      "hash")
+
+    checkAnswer(readStarLakeTable(tempPath)
+      .filter("value < 3")
+      .select("range", "hash", "value"),
+      Seq((20201101, 1, 1), (20201101, 2, 2))
+        .toDF("range", "hash", "value")
+    )
+  }
+
+
+  test("merge multi files with empty batch") {
+    initTable(
+      Seq((20201101, 1, 1), (20201101, 2, 2), (20201101, 3, 3), (20201102, 4, 4), (20201102, 1, 1))
+        .toDF("range", "hash", "value"),
+      "range",
+      "hash")
+
+    executeUpsert(Seq((20201102, 4, 5))
+      .toDF("range", "hash", "value"),
+      None,
+      tempPath)
+
+    checkAnswer(readStarLakeTable(tempPath)
+      .filter("value < 3")
+      .select("range", "hash", "value"),
+      Seq((20201101, 1, 1), (20201101, 2, 2), (20201102, 1, 1))
+        .toDF("range", "hash", "value")
+    )
+  }
 
   test("basic upsert - same columns") {
     initTable(
@@ -625,22 +659,22 @@ class UpsertSuiteBase extends QueryTest
   })
 
 
-  test("create table with hash key disordered"){
+  test("create table with hash key disordered") {
     withTempDir(dir => {
       val tablePath = dir.getAbsolutePath
-      val df1 = Seq(("range", "a1",1, "a2","a"),("range","b1",2, "b2","b"),("range","c1",3, "c2","c"))
-        .toDF("range","v1","hash1","v2","hash2")
+      val df1 = Seq(("range", "a1", 1, "a2", "a"), ("range", "b1", 2, "b2", "b"), ("range", "c1", 3, "c2", "c"))
+        .toDF("range", "v1", "hash1", "v2", "hash2")
 
-      val df2 = Seq(("range",1, "a11", "a22","a"),("range",2,"b11", "b22","b"),("range",3,"c11", "c22","c"))
-        .toDF("range","hash1","v1","v2","hash2")
-      val df3 = Seq(("range", "d1",4, "d2","d"),("range","b111",2, "b222","b"),("range","c111",3, "c222","c"))
-        .toDF("range","v1","hash1","v2","hash2")
+      val df2 = Seq(("range", 1, "a11", "a22", "a"), ("range", 2, "b11", "b22", "b"), ("range", 3, "c11", "c22", "c"))
+        .toDF("range", "hash1", "v1", "v2", "hash2")
+      val df3 = Seq(("range", "d1", 4, "d2", "d"), ("range", "b111", 2, "b222", "b"), ("range", "c111", 3, "c222", "c"))
+        .toDF("range", "v1", "hash1", "v2", "hash2")
 
       df1.write.mode("overwrite")
         .format("star")
-        .option("rangePartitions","range")
-        .option("hashPartitions","hash1,hash2")
-        .option("hashBucketNum","2")
+        .option("rangePartitions", "range")
+        .option("hashPartitions", "hash1,hash2")
+        .option("hashBucketNum", "2")
         .save(tablePath)
 
       val table = StarTable.forPath(tablePath)
@@ -648,33 +682,33 @@ class UpsertSuiteBase extends QueryTest
       table.upsert(df3)
 
       val requiredDF = Seq(
-        ("range", "a11",1, "a22","a"),
-        ("range","b111",2, "b222","b"),
-        ("range","c111",3, "c222","c"),
-        ("range","d1",4, "d2","d"))
-        .toDF("range","v1","hash1","v2","hash2")
+        ("range", "a11", 1, "a22", "a"),
+        ("range", "b111", 2, "b222", "b"),
+        ("range", "c111", 3, "c222", "c"),
+        ("range", "d1", 4, "d2", "d"))
+        .toDF("range", "v1", "hash1", "v2", "hash2")
 
       checkAnswer(
-        table.toDF.select("range","hash1","hash2","v1","v2"),
-        requiredDF.select("range","hash1","hash2","v1","v2"))
+        table.toDF.select("range", "hash1", "hash2", "v1", "v2"),
+        requiredDF.select("range", "hash1", "hash2", "v1", "v2"))
 
       checkAnswer(
-        table.toDF.select("hash2","v1","v2"),
-        requiredDF.select("hash2","v1","v2"))
+        table.toDF.select("hash2", "v1", "v2"),
+        requiredDF.select("hash2", "v1", "v2"))
 
       checkAnswer(
-        table.toDF.select("v1","v2"),
-        requiredDF.select("v1","v2"))
+        table.toDF.select("v1", "v2"),
+        requiredDF.select("v1", "v2"))
 
       checkAnswer(
-        table.toDF.select("range","v2"),
-        requiredDF.select("range","v2"))
+        table.toDF.select("range", "v2"),
+        requiredDF.select("range", "v2"))
 
       table.compaction()
 
       checkAnswer(
-        table.toDF.select("range","hash1","hash2","v1","v2"),
-        requiredDF.select("range","hash1","hash2","v1","v2"))
+        table.toDF.select("range", "hash1", "hash2", "v1", "v2"),
+        requiredDF.select("range", "hash1", "hash2", "v1", "v2"))
 
 
     })

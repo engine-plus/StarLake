@@ -20,6 +20,7 @@ import java.util.ConcurrentModificationException
 
 import com.engineplus.star.meta.MetaUtils._
 import com.engineplus.star.meta._
+import org.apache.hadoop.fs.Path
 import org.apache.spark.internal.Logging
 import org.apache.spark.sql.SparkSession
 import org.apache.spark.sql.catalyst.expressions.{And, Expression, Literal}
@@ -27,7 +28,7 @@ import org.apache.spark.sql.execution.datasources.parquet.ParquetSchemaConverter
 import org.apache.spark.sql.star.exception.MetaRerunException
 import org.apache.spark.sql.star.schema.SchemaUtils
 import org.apache.spark.sql.star.sources.StarLakeSQLConf
-import org.apache.spark.sql.star.utils.{DataFileInfo, MetaInfo, PartitionInfo, TableInfo}
+import org.apache.spark.sql.star.utils._
 
 import scala.collection.mutable.{ArrayBuffer, HashSet}
 
@@ -112,9 +113,33 @@ trait Transaction extends TransactionalWrite with Logging {
   /** Whether this commit is delta commit */
   override protected var commitType: Option[CommitType] = None
 
+  /** Whether this table has a short table name */
+  override protected var shortTableName: Option[String] = None
+
+  /** Whether this table is a material view */
+  override protected var materialInfo: Option[MaterialViewInfo] = None
+
   def setCommitType(value: String): Unit = {
     assert(commitType.isEmpty, "Cannot set commit type more than once in a transaction.")
     commitType = Some(CommitType(value))
+  }
+
+  def setShortTableName(value: String): Unit = {
+    assert(!new Path(value).isAbsolute, s"Short Table name `$value` can't be a path")
+    assert(shortTableName.isEmpty, "Cannot set short table name more than once in a transaction.")
+    assert(tableInfo.short_table_name.isEmpty || tableInfo.short_table_name.get.equals(value),
+      s"Table `$table_name` already has a short name `${tableInfo.short_table_name.get}`, " +
+        s"you can't change it to `$value`")
+    if (tableInfo.short_table_name.isEmpty) {
+      shortTableName = Some(value)
+    }
+  }
+
+  def setMaterialInfo(value: MaterialViewInfo): Unit = {
+    assert(shortTableName.isDefined || tableInfo.short_table_name.isDefined,
+      "Material view should has a short table name")
+    assert(materialInfo.isEmpty, "Cannot set materialInfo more than once in a transaction.")
+    materialInfo = Some(value)
   }
 
   def isFirstCommit: Boolean = snapshot.isFirstCommit
@@ -153,7 +178,7 @@ trait Transaction extends TransactionalWrite with Logging {
   def tableInfo: TableInfo = newTableInfo.getOrElse(snapshotTableInfo)
 
   /** Set read files when compacting part of table files. */
-  def setReadFiles(files: Seq[DataFileInfo]): Unit ={
+  def setReadFiles(files: Seq[DataFileInfo]): Unit = {
     readFiles.clear()
     readFiles ++= files
   }
@@ -212,7 +237,6 @@ trait Transaction extends TransactionalWrite with Logging {
       partitionInfo.range_id,
       partitionInfo.range_value,
       partitionInfo.read_version,
-      //      new ArrayBuffer[DataFileInfo](),
       true)
 
     readFiles ++= files
@@ -237,6 +261,7 @@ trait Transaction extends TransactionalWrite with Logging {
       assert(!committed, "Transaction already committed.")
 
       if (isFirstCommit) {
+        val is_material_view = if (materialInfo.isDefined) true else false
         MetaVersion.createNewTable(
           table_name,
           tableInfo.table_id,
@@ -244,7 +269,8 @@ trait Transaction extends TransactionalWrite with Logging {
           tableInfo.range_column,
           tableInfo.hash_column,
           toCassandraSetting(tableInfo.configuration),
-          tableInfo.bucket_num
+          tableInfo.bucket_num,
+          is_material_view
         )
       }
 
@@ -343,7 +369,7 @@ trait Transaction extends TransactionalWrite with Logging {
         }
       })
 
-      val commit_info = MetaInfo(
+      val meta_info = MetaInfo(
         table_info = tableInfo,
         partitionInfoArray = partition_info_arr_buf.toArray,
         commit_type = commitType.getOrElse(CommitType("simple")),
@@ -351,8 +377,9 @@ trait Transaction extends TransactionalWrite with Logging {
         batch_id = batch_id)
 
       try {
+        val commitOptions = CommitOptions(shortTableName, materialInfo)
         val changeSchema = !isFirstCommit && newTableInfo.nonEmpty
-        MetaCommit.doMetaCommit(commit_info, changeSchema)
+        MetaCommit.doMetaCommit(meta_info, changeSchema, commitOptions)
       } catch {
         case e: MetaRerunException => throw e
         case e: Throwable => throw e
@@ -362,12 +389,6 @@ trait Transaction extends TransactionalWrite with Logging {
 
     }
     snapshotManagement.updateSnapshot()
-  }
-
-
-  /** Mark the entire table as tainted by this transaction. */
-  def readWholeTable(): Unit = {
-    readPredicates += Literal(true)
   }
 
 

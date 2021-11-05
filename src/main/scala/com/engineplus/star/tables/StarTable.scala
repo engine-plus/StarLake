@@ -16,20 +16,20 @@
 
 package com.engineplus.star.tables
 
-import java.io.File
 import java.net.URI
 
 import com.engineplus.star.livy.{CompactionJob, CompactionJobWithCondition, ExecuteWithLivy}
+import com.engineplus.star.meta.MetaVersion
 import com.engineplus.star.tables.execution.StarTableOperations
 import org.apache.hadoop.fs.Path
-import org.apache.spark.annotation._
 import org.apache.spark.internal.Logging
 import org.apache.spark.sql._
-import org.apache.spark.sql.catalyst.expressions.{Expression, Literal}
+import org.apache.spark.sql.catalyst.expressions.Expression
 import org.apache.spark.sql.execution.datasources.v2.merge.parquet.batch.merge_operator.MergeOperator
+import org.apache.spark.sql.star.commands.CreateMaterialViewCommand
 import org.apache.spark.sql.star.exception.StarLakeErrors
 import org.apache.spark.sql.star.sources.StarLakeSourceUtils
-import org.apache.spark.sql.star.{SnapshotManagement, StarLakeTableIdentifier, StarLakeUtils}
+import org.apache.spark.sql.star.{SnapshotManagement, StarLakeUtils}
 
 import scala.collection.JavaConverters._
 
@@ -41,7 +41,6 @@ class StarTable(df: => Dataset[Row], snapshotManagement: SnapshotManagement)
     * SQL `tableName AS alias`.
     *
     */
-  @Evolving
   def as(alias: String): StarTable = new StarTable(df.as(alias), snapshotManagement)
 
   /**
@@ -49,7 +48,6 @@ class StarTable(df: => Dataset[Row], snapshotManagement: SnapshotManagement)
     * SQL `tableName AS alias`.
     *
     */
-  @Evolving
   def alias(alias: String): StarTable = as(alias)
 
 
@@ -57,7 +55,6 @@ class StarTable(df: => Dataset[Row], snapshotManagement: SnapshotManagement)
     * Get a DataFrame (that is, Dataset[Row]) representation of this StarTable.
     *
     */
-  @Evolving
   def toDF: Dataset[Row] = df
 
 
@@ -66,7 +63,6 @@ class StarTable(df: => Dataset[Row], snapshotManagement: SnapshotManagement)
     *
     * @param condition Boolean SQL expression
     */
-  @Evolving
   def delete(condition: String): Unit = {
     delete(functions.expr(condition))
   }
@@ -76,7 +72,6 @@ class StarTable(df: => Dataset[Row], snapshotManagement: SnapshotManagement)
     *
     * @param condition Boolean SQL expression
     */
-  @Evolving
   def delete(condition: Column): Unit = {
     executeDelete(Some(condition.expr))
   }
@@ -85,7 +80,6 @@ class StarTable(df: => Dataset[Row], snapshotManagement: SnapshotManagement)
     * Delete data from the table.
     *
     */
-  @Evolving
   def delete(): Unit = {
     executeDelete(None)
   }
@@ -104,7 +98,6 @@ class StarTable(df: => Dataset[Row], snapshotManagement: SnapshotManagement)
     * @param set rules to update a row as a Scala map between target column names and
     *            corresponding update expressions as Column objects.
     */
-  @Evolving
   def update(set: Map[String, Column]): Unit = {
     executeUpdate(set, None)
   }
@@ -127,7 +120,6 @@ class StarTable(df: => Dataset[Row], snapshotManagement: SnapshotManagement)
     * @param set rules to update a row as a Java map between target column names and
     *            corresponding update expressions as Column objects.
     */
-  @Evolving
   def update(set: java.util.Map[String, Column]): Unit = {
     executeUpdate(set.asScala.toMap, None)
   }
@@ -149,7 +141,6 @@ class StarTable(df: => Dataset[Row], snapshotManagement: SnapshotManagement)
     * @param set       rules to update a row as a Scala map between target column names and
     *                  corresponding update expressions as Column objects.
     */
-  @Evolving
   def update(condition: Column, set: Map[String, Column]): Unit = {
     executeUpdate(set, Some(condition))
   }
@@ -175,7 +166,6 @@ class StarTable(df: => Dataset[Row], snapshotManagement: SnapshotManagement)
     * @param set       rules to update a row as a Java map between target column names and
     *                  corresponding update expressions as Column objects.
     */
-  @Evolving
   def update(condition: Column, set: java.util.Map[String, Column]): Unit = {
     executeUpdate(set.asScala.toMap, Some(condition))
   }
@@ -191,7 +181,6 @@ class StarTable(df: => Dataset[Row], snapshotManagement: SnapshotManagement)
     * @param set rules to update a row as a Scala map between target column names and
     *            corresponding update expressions as SQL formatted strings.
     */
-  @Evolving
   def updateExpr(set: Map[String, String]): Unit = {
     executeUpdate(toStrColumnMap(set), None)
   }
@@ -211,7 +200,6 @@ class StarTable(df: => Dataset[Row], snapshotManagement: SnapshotManagement)
     * @param set rules to update a row as a Java map between target column names and
     *            corresponding update expressions as SQL formatted strings.
     */
-  @Evolving
   def updateExpr(set: java.util.Map[String, String]): Unit = {
     executeUpdate(toStrColumnMap(set.asScala.toMap), None)
   }
@@ -232,7 +220,6 @@ class StarTable(df: => Dataset[Row], snapshotManagement: SnapshotManagement)
     * @param set       rules to update a row as a Scala map between target column names and
     *                  corresponding update expressions as SQL formatted strings.
     */
-  @Evolving
   def updateExpr(condition: String, set: Map[String, String]): Unit = {
     executeUpdate(toStrColumnMap(set), Some(functions.expr(condition)))
   }
@@ -256,7 +243,6 @@ class StarTable(df: => Dataset[Row], snapshotManagement: SnapshotManagement)
     * @param set       rules to update a row as a Java map between target column names and
     *                  corresponding update expressions as SQL formatted strings.
     */
-  @Evolving
   def updateExpr(condition: String, set: java.util.Map[String, String]): Unit = {
     executeUpdate(toStrColumnMap(set.asScala.toMap), Some(functions.expr(condition)))
   }
@@ -275,21 +261,8 @@ class StarTable(df: => Dataset[Row], snapshotManagement: SnapshotManagement)
     * @param condition you can define a condition to filter Star data
     */
   def upsert(source: DataFrame, condition: String = ""): Unit = {
-    condition match {
-      case "" => upsert(source, Literal(true))
-      case _ => upsert(source, functions.expr(condition).expr)
-    }
-  }
-
-
-  def upsert(source: DataFrame): Unit = {
-    upsert(source, Literal(true))
-  }
-
-  def upsert(source: DataFrame, condition: Expression): Unit = {
     executeUpsert(this, source, condition)
   }
-
 
   //by default, force perform compaction on whole table
   def compaction(): Unit = {
@@ -386,10 +359,10 @@ class StarTable(df: => Dataset[Row], snapshotManagement: SnapshotManagement)
         livyClient.addJar(new URI(path)).get()
       })
     }
-//    livyClient.uploadJar(new File(ExecuteWithLivy.getSourcePath(this))).get()
-    if (condition.equalsIgnoreCase("")){
+    //    livyClient.uploadJar(new File(ExecuteWithLivy.getSourcePath(this))).get()
+    if (condition.equalsIgnoreCase("")) {
       livyClient.submit(new CompactionJob(snapshotManagement.table_name, force))
-    }else{
+    } else {
       livyClient.submit(new CompactionJobWithCondition(snapshotManagement.table_name, condition, force))
     }
   }
@@ -410,8 +383,9 @@ class StarTable(df: => Dataset[Row], snapshotManagement: SnapshotManagement)
     executeCleanup(snapshotManagement, justList)
   }
 
-  def dropTable(): Unit = {
+  def dropTable(): Boolean = {
     executeDropTable(snapshotManagement)
+    true
   }
 
   def dropPartition(condition: String): Unit = {
@@ -419,15 +393,24 @@ class StarTable(df: => Dataset[Row], snapshotManagement: SnapshotManagement)
   }
 
   def dropPartition(condition: Expression): Unit = {
+    assert(snapshotManagement.snapshot.getTableInfo.range_partition_columns.nonEmpty,
+      s"Table `${snapshotManagement.table_name}` is not a range partitioned table, dropTable command can't use on it.")
     executeDropPartition(snapshotManagement, condition)
+  }
+
+  def updateMaterialView(): Unit = {
+    val tableInfo = snapshotManagement.snapshot.getTableInfo
+    if (!tableInfo.is_material_view) {
+      throw StarLakeErrors.notMaterialViewException(tableInfo.table_name, tableInfo.short_table_name.getOrElse("None"))
+    }
+
+    executeUpdateForMaterialView(snapshotManagement)
   }
 
 
 }
 
 object StarTable {
-
-
   /**
     * Create a StarTable for the data at the given `path`.
     *
@@ -436,7 +419,6 @@ object StarTable {
     * `SparkSession.getActiveSession()` is empty.
     *
     */
-  @Evolving
   def forPath(path: String): StarTable = {
     val sparkSession = SparkSession.getActiveSession.getOrElse {
       throw new IllegalArgumentException("Could not find active SparkSession")
@@ -450,7 +432,6 @@ object StarTable {
     * Create a StarTable for the data at the given `path` using the given SparkSession.
     *
     */
-  @Evolving
   def forPath(sparkSession: SparkSession, path: String): StarTable = {
     if (StarLakeUtils.isStarLakeTable(sparkSession, new Path(path))) {
       new StarTable(sparkSession.read.format(StarLakeSourceUtils.SOURCENAME).load(path),
@@ -461,7 +442,7 @@ object StarTable {
   }
 
   /**
-    * Create a StarTable using the given table or view name using the given SparkSession.
+    * Create a StarTable using the given table name using the given SparkSession.
     *
     * Note: This uses the active SparkSession in the current thread to read the table data. Hence,
     * this throws error if active SparkSession has not been set, that is,
@@ -478,11 +459,13 @@ object StarTable {
     * Create a StarTable using the given table or view name using the given SparkSession.
     */
   def forName(sparkSession: SparkSession, tableName: String): StarTable = {
-    val tableIdent = sparkSession.sessionState.sqlParser.parseTableIdentifier(tableName)
-    if (StarLakeUtils.isStarLakeTable(sparkSession, tableIdent)) {
-      new StarTable(sparkSession.table(tableName), SnapshotManagement.forTable(sparkSession, tableIdent))
+    val (exists, tablePath) = MetaVersion.isShortTableNameExists(tableName)
+    if (exists) {
+      val starName = if (tableName.startsWith("star.")) tableName else s"star.$tableName"
+      new StarTable(sparkSession.table(starName),
+        SnapshotManagement(tablePath))
     } else {
-      throw StarLakeErrors.notAStarLakeTableException(StarLakeTableIdentifier(table = Some(tableIdent)))
+      throw StarLakeErrors.notAStarLakeTableException(tableName)
     }
   }
 
@@ -490,12 +473,29 @@ object StarTable {
     StarLakeUtils.isStarLakeTable(tablePath)
   }
 
-
-  def registerMergeOperator(spark: SparkSession, className: String, funName: String): Unit ={
+  def registerMergeOperator(spark: SparkSession, className: String, funName: String): Unit = {
     StarLakeUtils.getClass(className).getConstructors()(0)
       .newInstance()
       .asInstanceOf[MergeOperator[Any]]
       .register(spark, funName)
+  }
+
+  def createMaterialView(viewName: String,
+                         viewPath: String,
+                         sqlText: String,
+                         rangePartitions: String = "",
+                         hashPartitions: String = "",
+                         hashBucketNum: Int = -1,
+                         autoUpdate: Boolean = false): Unit = {
+    CreateMaterialViewCommand(
+      viewName,
+      viewPath,
+      sqlText,
+      rangePartitions,
+      hashPartitions,
+      hashBucketNum.toString,
+      autoUpdate)
+      .run(SparkSession.active)
   }
 
 

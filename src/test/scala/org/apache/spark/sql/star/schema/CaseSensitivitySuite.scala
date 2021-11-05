@@ -276,7 +276,6 @@ class CaseSensitivitySuite extends QueryTest
     }
   }
 
-
   testWithCaseSensitivity("case sensitivity of partition fields") {
     withTempDir { tempDir =>
       val query = "SELECT id + 1 as Foo, id as Bar FROM RANGE(1)"

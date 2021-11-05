@@ -17,12 +17,13 @@
 package org.apache.spark.sql.star.commands
 
 import org.apache.spark.sql.catalyst.expressions.And
+import org.apache.spark.sql.catalyst.plans.QueryPlan
 import org.apache.spark.sql.star._
 import org.apache.spark.sql.star.exception.StarLakeErrors
 import org.apache.spark.sql.star.utils.DataFileInfo
 //import org.apache.spark.sql.star.actions.AddFile
 import org.apache.spark.sql._
-import org.apache.spark.sql.catalyst.expressions.{Alias, AttributeReference, Expression, Literal, NamedExpression, PredicateHelper}
+import org.apache.spark.sql.catalyst.expressions.{Alias, AttributeReference, Literal, NamedExpression, PredicateHelper}
 import org.apache.spark.sql.catalyst.plans.logical._
 import org.apache.spark.sql.execution.command.RunnableCommand
 import org.apache.spark.sql.functions._
@@ -31,62 +32,23 @@ import org.apache.spark.sql.star.sources.StarLakeSQLConf
 import org.apache.spark.sql.star.utils.AnalysisHelper
 import org.apache.spark.sql.types.StructType
 
-case class UpsertDataRows(rows: Long)
-
-case class UpsertDataFiles(files: Long)
-
-/** State for a Upsert operation */
-case class UpsertStats(
-                        // Expressions used in Upsert
-                        conditionExpr: String,
-                        updateConditionExpr: String,
-                        updateExprs: Array[String],
-                        insertConditionExpr: String,
-                        insertExprs: Array[String],
-                        deleteConditionExpr: String,
-
-                        // Data sizes of source and target at different stages of processing
-                        source: UpsertDataRows,
-                        targetBeforeSkipping: UpsertDataFiles,
-                        targetAfterSkipping: UpsertDataFiles,
-
-                        // Data change sizes
-                        targetFilesRemoved: Long,
-                        targetFilesAdded: Long,
-                        targetRowsCopied: Long,
-                        targetRowsUpdated: Long,
-                        targetRowsInserted: Long,
-                        targetRowsDeleted: Long)
-
 /**
   * Performs a Upsert of a source query/table into a Star table.
-  *
-  * Issues an error message when the ON search_condition of the MERGE statement can match
-  * a single row from the target table with multiple rows of the source table-reference.
-  *
-  * Algorithm:
-  *
-  * Phase 1: Find the input files in target that are touched by the rows that satisfy
-  * the condition and verify that no two source rows match with the same target row.
-  * This is implemented as an inner-join using the given condition. See findTouchedFiles
-  * for more details.
-  *
-  * Phase 2: Read the touched files again and write new files with updated and/or inserted rows.
-  *
-  * Phase 3: Atomically remove the touched files and add the new files.
   *
   * @param source                   Source data to merge from
   * @param target                   Target table to merge into
   * @param targetSnapshotManagement snapshotManagement of the target table
-  * @param condition                Condition for a source row to match with a target row
+  * @param conditionString          Condition for a source row to match with a target row
   * @param migratedSchema           The final schema of the target - may be changed by schema evolution.
   */
-case class UpsertCommand(@transient source: LogicalPlan,
-                         @transient target: LogicalPlan,
-                         @transient targetSnapshotManagement: SnapshotManagement,
-                         condition: Expression,
+case class UpsertCommand(source: LogicalPlan,
+                         target: LogicalPlan,
+                         targetSnapshotManagement: SnapshotManagement,
+                         conditionString: String,
                          migratedSchema: Option[StructType]) extends RunnableCommand
   with Command with PredicateHelper with AnalysisHelper with ImplicitMetadataOperation {
+
+  override def innerChildren: Seq[QueryPlan[_]] = Seq(target, source)
 
   private val tableInfo = targetSnapshotManagement.snapshot.getTableInfo
 
@@ -95,9 +57,14 @@ case class UpsertCommand(@transient source: LogicalPlan,
   override val rangePartitions: String = tableInfo.range_column
   override val hashPartitions: String = tableInfo.hash_column
   override val hashBucketNum: Int = tableInfo.bucket_num
+  override val shortTableName: Option[String] = None
 
 
-  override def run(spark: SparkSession): Seq[Row] = {
+  final override def run(spark: SparkSession): Seq[Row] = {
+    val condition = conditionString match {
+      case "" => Literal(true)
+      case _ => expr(conditionString).expr
+    }
     targetSnapshotManagement.withNewTransaction { tc =>
       if (target.schema.size != tableInfo.schema.size) {
         throw StarLakeErrors.schemaChangedSinceAnalysis(

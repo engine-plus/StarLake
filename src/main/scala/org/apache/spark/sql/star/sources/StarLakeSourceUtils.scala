@@ -45,6 +45,10 @@ object StarLakeSourceUtils {
     MetaVersion.isTableExists(table_name)
   }
 
+  def isStarLakeShortTableNameExists(shortName: String): Boolean = {
+    MetaVersion.isShortTableNameExists(shortName)._1
+  }
+
   /** Check whether this table is a star table based on information from the Catalog. */
   def isStarLakeTable(provider: Option[String]): Boolean = {
     provider.exists(isStarLakeDataSourceName)
@@ -127,7 +131,7 @@ case class StarLakeBaseRelation(files: Seq[DataFileInfo],
   override def buildScan(requiredColumns: Array[String], filters: Array[Filter]): RDD[Row] = {
 
     //check and redo commit before read
-    MetaCommit.checkAndRedoCommit(tableInfo.table_id)
+    MetaCommit.checkAndRedoCommit(snapshotManagement.snapshot)
 
     val predicts = filters.length match {
       case 0 => expressions.Literal(true)

@@ -25,7 +25,7 @@ import org.apache.spark.sql.execution.datasources.v2.merge.MergePartitionedFile
 import org.apache.spark.sql.types._
 import org.apache.spark.sql.vectorized.ColumnarBatch
 
-import scala.collection.{BufferedIterator, mutable}
+import scala.collection.BufferedIterator
 
 trait MergeLogic {
 
@@ -66,7 +66,7 @@ class MergeSingletonFile(filesInfo: Seq[(MergePartitionedFile, PartitionReader[C
   val typeArray: Array[DataType] = filesInfo.head._1.fileInfo.map(_._2).toArray
 
   var temporaryRow: Array[Any] = new Array[Any](filesInfo.head._1.resultSchema.length)
-  //  //get next batch
+  // get next batch
   var fileSeq: Seq[(MergePartitionedFile, ColumnarBatch)] = MergeUtils.getNextBatch(filesInfo)
 
   val fileSchema: Seq[String] = filesInfo.head._1.fileInfo.map(_._1)
@@ -74,23 +74,32 @@ class MergeSingletonFile(filesInfo: Seq[(MergePartitionedFile, PartitionReader[C
     fileSchema.indexOf(schema)
   }).toArray
 
-  var singletonBatch: SingletonFileColumnarBatch = MergeUtils.initMergeBatch(fileSeq.head, resIndex)
-
+  val emptyBatch: Boolean = fileSeq.isEmpty
   var temporaryStoreLastRow = false
 
-  var bufferedIt: BufferedIterator[(InternalRow, Int)] = fileSeq.head._2.rowIterator().asScala.zipWithIndex.buffered
+  var singletonBatch: SingletonFileColumnarBatch = _
+  var bufferedIt: BufferedIterator[(InternalRow, Int)] = _
+
+  if (fileSeq.nonEmpty) {
+    singletonBatch = initMergeBatch(fileSeq.head, resIndex)
+    bufferedIt = fileSeq.head._2.rowIterator().asScala.zipWithIndex.buffered
+  }
+
   var rowId: Int = -1
 
   def deDuplication(): Boolean = {
+    if (emptyBatch) {
+      return false
+    }
     var lastKey: String = null
     rowId = -1
     while (true) {
       if (bufferedIt.hasNext) {
         val currentRow = bufferedIt.head._1
-        if(StringUtils.isEmpty(lastKey)){
+        if (StringUtils.isEmpty(lastKey)) {
           lastKey = combineKey(currentRow)
           rowId = bufferedIt.head._2
-        }else{
+        } else {
           if (combineKey(currentRow).equals(lastKey)) {
             if (temporaryStoreLastRow) temporaryStoreLastRow = false
             rowId = bufferedIt.head._2
@@ -113,7 +122,7 @@ class MergeSingletonFile(filesInfo: Seq[(MergePartitionedFile, PartitionReader[C
         fileSeq = MergeUtils.getNextBatch(filesInfo)
         if (fileSeq.nonEmpty) {
           bufferedIt = fileSeq.head._2.rowIterator().asScala.zipWithIndex.buffered
-          singletonBatch = MergeUtils.initMergeBatch(fileSeq.head, resIndex)
+          singletonBatch = initMergeBatch(fileSeq.head, resIndex)
         } else {
           return true
         }
@@ -139,6 +148,18 @@ class MergeSingletonFile(filesInfo: Seq[(MergePartitionedFile, PartitionReader[C
     } else {
       singletonBatch.getRow(rowId)
     }
+  }
+
+  def initMergeBatch(file: (MergePartitionedFile, ColumnarBatch), resIndex: Array[Int]): SingletonFileColumnarBatch = {
+    val columnArr =
+      resIndex.map(res => {
+        if (res == -1) {
+          null
+        } else {
+          file._2.column(res)
+        }
+      })
+    new SingletonFileColumnarBatch(columnArr)
   }
 
   override def closeReadFileReader(): Unit = {

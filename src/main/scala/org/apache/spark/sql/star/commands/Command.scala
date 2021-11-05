@@ -43,10 +43,9 @@ trait Command {
     }
   }
 
-  protected def verifyPartitionPredicates(
-                                           spark: SparkSession,
-                                           rangePartitionColumns: String,
-                                           predicates: Seq[Expression]): Unit = {
+  protected def verifyPartitionPredicates(spark: SparkSession,
+                                          rangePartitionColumns: String,
+                                          predicates: Seq[Expression]): Unit = {
 
     predicates.foreach { pred =>
       if (SubqueryExpression.hasSubquery(pred)) {
@@ -100,6 +99,7 @@ trait Command {
   /**
     * Find the AddFile record corresponding to the file that was read as part of a
     * delete/update operation.
+    *
     * @param filePath      The path to a file. Can be either absolute or relative
     * @param nameToFileMap Map generated through `generateCandidateFileMap()`
     */

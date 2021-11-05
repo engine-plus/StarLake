@@ -18,6 +18,7 @@ package org.apache.spark.sql.star.catalog
 
 import java.util
 
+import com.engineplus.star.meta.MetaVersion
 import com.engineplus.star.tables.StarTable
 import org.apache.hadoop.fs.Path
 import org.apache.spark.sql.catalyst.TableIdentifier
@@ -140,6 +141,12 @@ class StarLakeCatalog(val spark: SparkSession) extends DelegatingCatalogExtensio
         StarLakeTableV2(
           spark,
           new Path(ident.name()))
+      case _: NoSuchDatabaseException | _: NoSuchNamespaceException | _: NoSuchTableException
+        if isNameIdentifier(ident) =>
+        val tableName = MetaVersion.getTableNameFromShortTableName(ident.name)
+        StarLakeTableV2(
+          spark,
+          new Path(tableName))
     }
   }
 
@@ -482,6 +489,16 @@ class StarLakeCatalog(val spark: SparkSession) extends DelegatingCatalogExtensio
     }
   }
 
+  override def dropTable(ident: Identifier): Boolean = {
+    if (isPathIdentifier(ident)) {
+      StarTable.forPath(ident.name()).dropTable()
+    } else if (isNameIdentifier(ident)) {
+      StarTable.forName(ident.name()).dropTable()
+    } else {
+      super.dropTable(ident)
+    }
+  }
+
 
 }
 
@@ -509,14 +526,19 @@ trait SupportsPathIdentifier extends TableCatalog {
     }
   }
 
+  protected def isNameIdentifier(ident: Identifier): Boolean = {
+    hasStarLakeNamespace(ident) && MetaVersion.isShortTableNameExists(ident.name())._1
+  }
+
   protected def isPathIdentifier(table: CatalogTable): Boolean = {
     isPathIdentifier(Identifier.of(table.identifier.database.toArray, table.identifier.table))
   }
 
   override def tableExists(ident: Identifier): Boolean = {
     if (isPathIdentifier(ident)) {
-      val table_name = ident.name()
-      StarLakeSourceUtils.isStarLakeTableExists(table_name)
+      StarLakeSourceUtils.isStarLakeTableExists(ident.name())
+    } else if (isNameIdentifier(ident)) {
+      StarLakeSourceUtils.isStarLakeShortTableNameExists(ident.name())
     } else {
       super.tableExists(ident)
     }

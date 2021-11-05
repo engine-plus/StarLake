@@ -31,9 +31,9 @@ import org.apache.spark.sql.execution.datasources.v2.merge.parquet.batch.merge_o
 import org.apache.spark.sql.execution.datasources.v2.merge.parquet.{MergeFilePartitionReaderFactory, MergeParquetPartitionReaderFactory}
 import org.apache.spark.sql.internal.SQLConf
 import org.apache.spark.sql.sources.Filter
+import org.apache.spark.sql.star._
 import org.apache.spark.sql.star.sources.StarLakeSQLConf
 import org.apache.spark.sql.star.utils.{DataFileInfo, TableInfo}
-import org.apache.spark.sql.star._
 import org.apache.spark.sql.types.StructType
 import org.apache.spark.sql.util.CaseInsensitiveStringMap
 import org.apache.spark.sql.{AnalysisException, SparkSession}
@@ -55,6 +55,10 @@ abstract class MergeDeltaParquetScan(sparkSession: SparkSession,
                                      dataFilters: Seq[Expression] = Seq.empty)
   extends Scan with Batch
     with SupportsReportStatistics with Logging {
+  def getFileIndex: StarLakeFileIndexV2 = fileIndex
+
+  def getPartitionFilters: Seq[Expression] = partitionFilters
+
   def isSplittable(path: Path): Boolean = false
 
   //it may has to many delta files, check if we should compact part of files first to save memory
@@ -67,7 +71,7 @@ abstract class MergeDeltaParquetScan(sparkSession: SparkSession,
       f.copy(write_version = 0)
     } else f)
 
-  /** if delta files are too many, we will execute compaction first */
+  /** if there are too many delta files, we will execute compaction first */
   private def compactAndReturnNewFileIndex(oriFileIndex: StarLakeFileIndexV2): StarLakeFileIndexV2 = {
     val files = oriFileIndex.getFileInfo(partitionFilters)
       .map(f => if (f.is_base_file) {

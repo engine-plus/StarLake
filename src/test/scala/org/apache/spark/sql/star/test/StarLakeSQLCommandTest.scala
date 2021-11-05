@@ -20,10 +20,8 @@ import java.io.File
 
 import com.engineplus.star.sql.StarSparkSessionExtension
 import com.engineplus.star.tables
-import com.engineplus.star.tables.StarTable
 import org.apache.spark.SparkConf
 import org.apache.spark.internal.Logging
-import org.apache.spark.sql.catalyst.TableIdentifier
 import org.apache.spark.sql.internal.SQLConf
 import org.apache.spark.sql.star.catalog.StarLakeCatalog
 import org.apache.spark.sql.star.sources.StarLakeSQLConf
@@ -45,19 +43,9 @@ trait StarLakeTestUtils extends Logging {
   override def withTable(tableNames: String*)(f: => Unit): Unit = {
     Utils.tryWithSafeFinally(f) {
       tableNames.foreach { name =>
-        val location = try {
-          Option(spark.sessionState.catalog.getTableMetadata(TableIdentifier(name)).location)
-        } catch {
-          case e: Exception => None
-        }
         spark.sql(s"DROP TABLE IF EXISTS $name")
-        if (location.isDefined) {
-          try {
-            StarTable.forPath(location.get.toString).dropTable()
-          } catch {
-            case e: Exception =>
-          }
-        }
+        val starName = if (name.startsWith("star.")) name else s"star.$name"
+        spark.sql(s"DROP TABLE IF EXISTS $starName")
       }
     }
   }

@@ -19,9 +19,11 @@ package org.apache.spark.sql.star.commands
 import com.engineplus.star.meta.MetaVersion
 import org.apache.hadoop.fs.Path
 import org.apache.spark.internal.Logging
-import org.apache.spark.sql.catalyst.expressions.{Expression, PredicateHelper}
+import org.apache.spark.sql.catalyst.expressions.PredicateHelper
+import org.apache.spark.sql.execution.command.RunnableCommand
 import org.apache.spark.sql.execution.datasources.v2.merge.MergeDeltaParquetScan
 import org.apache.spark.sql.execution.datasources.v2.{DataSourceV2Relation, DataSourceV2ScanRelation}
+import org.apache.spark.sql.functions.expr
 import org.apache.spark.sql.star.catalog.StarLakeTableV2
 import org.apache.spark.sql.star.exception.StarLakeErrors
 import org.apache.spark.sql.star.sources.StarLakeSQLConf
@@ -34,10 +36,10 @@ import scala.collection.JavaConversions._
 
 
 case class CompactionCommand(snapshotManagement: SnapshotManagement,
-                             condition: Option[Expression],
+                             conditionString: String,
                              force: Boolean,
                              mergeOperatorInfo: Map[String, String])
-  extends PredicateHelper with Logging {
+  extends RunnableCommand with PredicateHelper with Logging {
 
 
   /**
@@ -106,7 +108,11 @@ case class CompactionCommand(snapshotManagement: SnapshotManagement,
     logInfo("=========== Compaction Success!!! ===========")
   }
 
-  def run(sparkSession: SparkSession): Seq[Row] = {
+  override def run(sparkSession: SparkSession): Seq[Row] = {
+    val condition = conditionString match {
+      case "" => None
+      case _: String => Option(expr(conditionString).expr)
+    }
     //when condition is defined, only one partition need compaction,
     //else we will check whole table
     if (condition.isDefined) {

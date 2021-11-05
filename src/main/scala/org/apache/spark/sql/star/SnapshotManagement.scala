@@ -159,9 +159,6 @@ class SnapshotManagement(path: String) extends Logging {
     }
   }
 
-  def assertTableNameIsRootPath: Unit = {
-  }
-
   def createRelation(partitionFilters: Seq[Expression] = Nil): BaseRelation = {
     val files: Array[DataFileInfo] = PartitionFilter.filesForScan(snapshot, partitionFilters)
     StarLakeBaseRelation(files, this)(spark)
@@ -210,7 +207,6 @@ class SnapshotManagement(path: String) extends Logging {
 
 }
 
-case class GroupFiles(key: (Map[String, String], Int), dataFiles: Seq[DataFileInfo])
 
 object SnapshotManagement {
 

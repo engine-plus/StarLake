@@ -67,6 +67,7 @@ class MergeMultiFileWithOperator(filesInfo: Seq[(MergePartitionedFile, Partition
     t._1.writeVersion -> t._1.fileInfo.map(info => (fieldIndexMap(info._1), info._2)).toArray
   }).toMap
 
+  //every column has an ArrayBuffer to keep all the value index of the same primary key
   private val resultIndex = new Array[ArrayBuffer[(Int, Int)]](resultSchema.length)
   MergeUtils.intBatchIndexMerge(resultIndex)
 
@@ -88,7 +89,7 @@ class MergeMultiFileWithOperator(filesInfo: Seq[(MergePartitionedFile, Partition
   //get next batch
   val fileSeq: Seq[(MergePartitionedFile, ColumnarBatch)] = MergeUtils.getNextBatch(filesInfo)
   val mergeHeap = new MergeOptimizeHeap(versionKeyInfoMap)
-  mergeHeap.enqueueBySeq(MergeUtils.toBufferdIterator(fileSeq))
+  mergeHeap.enqueueBySeq(MergeUtils.toBufferedIterator(fileSeq))
 
   /** initialize mergeBatchColumnIndex and mergeColumnarBatch object */
   val mergeColumnIndexMap: mutable.Map[Long, Array[Int]] = mutable.Map[Long, Array[Int]]()
@@ -170,7 +171,7 @@ class MergeMultiFileWithOperator(filesInfo: Seq[(MergePartitionedFile, Partition
         val nextBatches = MergeUtils.getNextBatch(fileInfo)
 
         if (nextBatches.nonEmpty) {
-          val bufferIt = MergeUtils.toBufferdIterator(nextBatches)
+          val bufferIt = MergeUtils.toBufferedIterator(nextBatches)
           mergeHeap.enqueue(bufferIt.head)
         } else {
           mergeHeap.poll()

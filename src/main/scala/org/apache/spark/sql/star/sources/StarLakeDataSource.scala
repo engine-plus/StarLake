@@ -59,14 +59,14 @@ class StarLakeDataSource
       throw StarLakeErrors.pathNotSpecifiedException
     })
 
-    val tableInfo = SnapshotManagement(path).snapshot.getTableInfo
+    val snapshot = SnapshotManagement(path).snapshot
+    val tableInfo = snapshot.getTableInfo
     //before sink, checkAndRedoCommit first
-    val tableId = tableInfo.table_id
-    MetaCommit.checkAndRedoCommit(tableId)
+    MetaCommit.checkAndRedoCommit(snapshot)
 
     //update mode can only be used with hash partition
     if (outputMode == OutputMode.Update()) {
-      if(tableInfo.hash_column.isEmpty && parameters.getOrElse("hashpartitions", "").isEmpty){
+      if (tableInfo.hash_column.isEmpty && parameters.getOrElse("hashpartitions", "").isEmpty) {
         throw StarLakeErrors.outputModeNotSupportedException(getClass.getName, outputMode)
       }
     }
@@ -218,8 +218,6 @@ object StarLakeDataSource extends Logging {
         // Nested fields cannot be partitions, so we pass the key as a identifier
         EqualTo(UnresolvedAttribute(Seq(key)), Literal(value))
       }
-//      val files = PartitionFilter.filterFileList(
-//        table_info.range_partition_schema, snapshot.allDataInfoDS.toDF(), filters)
       val files = PartitionFilter.partitionsForScan(snapshot, filters)
       if (files.isEmpty) {
         throw StarLakeErrors.tableNotExistsException(userPath)

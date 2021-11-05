@@ -28,6 +28,7 @@ import scala.util.matching.Regex
 object MetaVersion {
   private val cassandraConnector = MetaUtils.cassandraConnector
   private val database = MetaUtils.DATA_BASE
+  private val defaultValue = MetaUtils.UNDO_LOG_DEFAULT_VALUE
 
   def isTableExists(table_name: String): Boolean = {
     cassandraConnector.withSessionDo(session => {
@@ -66,6 +67,41 @@ object MetaVersion {
     })
   }
 
+  //check whether short_table_name exists, and return table path if exists
+  def isShortTableNameExists(short_table_name: String): (Boolean, String) = {
+    cassandraConnector.withSessionDo(session => {
+      val res = session.execute(
+        s"""
+           |select table_name from $database.table_relation
+           |where short_table_name='$short_table_name'
+        """.stripMargin)
+      val table_name = try {
+        res.one().getString("table_name")
+      } catch {
+        case _: NullPointerException => return (false, "-1")
+        case e: Exception => throw e
+      }
+      (true, table_name)
+    })
+  }
+
+  //get table path, if not exists, return "not found"
+  def getTableNameFromShortTableName(short_table_name: String): String = {
+    cassandraConnector.withSessionDo(session => {
+      val res = session.execute(
+        s"""
+           |select table_name from $database.table_relation
+           |where short_table_name='$short_table_name'
+        """.stripMargin)
+      try {
+        res.one().getString("table_name")
+      } catch {
+        case _: NullPointerException => return "not found"
+        case e: Exception => throw e
+      }
+    })
+  }
+
   def isPartitionExists(table_id: String, range_value: String, range_id: String, commit_id: String): Boolean = {
     cassandraConnector.withSessionDo(session => {
       val res = session.execute(
@@ -92,7 +128,8 @@ object MetaVersion {
                      range_column: String,
                      hash_column: String,
                      setting: String,
-                     bucket_num: Int): Unit = {
+                     bucket_num: Int,
+                     is_material_view: Boolean): Unit = {
     cassandraConnector.withSessionDo(session => {
       val table_schema_index = if (table_schema.length > MetaUtils.MAX_SIZE_PER_VALUE) {
         FragmentValue.splitLargeValueIntoFragmentValues(table_id, table_schema)
@@ -103,8 +140,10 @@ object MetaVersion {
       val res = session.execute(
         s"""
            |insert into $database.table_info
-           |(table_name,table_id,table_schema,range_column,hash_column,setting,read_version,pre_write_version,bucket_num)
-           |values ('$table_name','$table_id','$table_schema_index','$range_column','$hash_column',$setting,1,1,$bucket_num)
+           |(table_name,table_id,table_schema,range_column,hash_column,setting,read_version,pre_write_version,
+           |bucket_num,short_table_name,is_material_view)
+           |values ('$table_name','$table_id','$table_schema_index','$range_column','$hash_column',$setting,1,1,
+           |$bucket_num,'$defaultValue',$is_material_view)
            |if not exists
       """.stripMargin)
       if (!res.wasApplied()) {
@@ -141,7 +180,8 @@ object MetaVersion {
     cassandraConnector.withSessionDo(session => {
       val res = session.execute(
         s"""
-           |select table_id,table_schema,range_column,hash_column,setting,read_version,bucket_num
+           |select table_id,table_schema,range_column,hash_column,setting,read_version,bucket_num,
+           |short_table_name,is_material_view
            |from $database.table_info where table_name='$table_name'
       """.stripMargin).one()
       val table_id = res.getString("table_id")
@@ -153,6 +193,7 @@ object MetaVersion {
       } else {
         tmp_table_schema
       }
+      val short_table_name = res.getString("short_table_name")
 
       TableInfo(
         table_name,
@@ -161,9 +202,10 @@ object MetaVersion {
         res.getString("range_column"),
         res.getString("hash_column"),
         res.getInt("bucket_num"),
-        //        Utils.fromCassandraSetting(res.getString("setting")),
         res.getMap("setting", classOf[String], classOf[String]).toMap,
-        res.getInt("read_version")
+        res.getInt("read_version"),
+        if (short_table_name.equals(defaultValue)) None else Some(short_table_name),
+        res.getBool("is_material_view")
       )
     })
 
@@ -192,7 +234,7 @@ object MetaVersion {
 
   }
 
-  def getPartitionId(table_id: String, range_value: String): (Boolean, String) ={
+  def getPartitionId(table_id: String, range_value: String): (Boolean, String) = {
     cassandraConnector.withSessionDo(session => {
       val res = session.execute(
         s"""
@@ -235,37 +277,11 @@ object MetaVersion {
 
   }
 
-  def updatePartitionReadVersion(table_id: String,
-                                 range_id: String,
-                                 table_name: String,
-                                 range_value: String,
-                                 write_version: Long,
-                                 commit_id: String,
-                                 delta_file_num: Int,
-                                 be_compacted: Boolean): Unit = {
-    cassandraConnector.withSessionDo(session => {
-      val ori_read_version = write_version - 1
-      session.execute(
-        s"""
-           |update $database.partition_info set
-           |read_version=$write_version,
-           |last_update_timestamp=${System.currentTimeMillis()},
-           |delta_file_num=$delta_file_num,
-           |be_compacted=$be_compacted
-           |where table_id='$table_id' and range_value='$range_value'
-           |if range_id='$range_id' and read_version=$ori_read_version
-      """.stripMargin)
-    })
-
-  }
-
-
   def updatePartitionInfo(info: undoLogInfo): Unit = {
     updatePartitionInfo(
       info.table_id,
       info.range_value,
       info.range_id,
-      info.commit_id,
       info.write_version,
       info.delta_file_num,
       info.be_compacted
@@ -275,7 +291,6 @@ object MetaVersion {
   def updatePartitionInfo(table_id: String,
                           range_value: String,
                           range_id: String,
-                          commit_id: String,
                           write_version: Long,
                           delta_file_num: Int,
                           be_compacted: Boolean): Unit = {
@@ -297,7 +312,6 @@ object MetaVersion {
 
   def updateTableSchema(table_name: String,
                         table_id: String,
-                        commit_id: String,
                         table_schema: String,
                         config: Map[String, String],
                         new_read_version: Int): Unit = {
@@ -343,6 +357,46 @@ object MetaVersion {
            |where table_id='$table_id' and range_value='$range_value'
            |if range_id='$range_id'
       """.stripMargin)
+    })
+  }
+
+  def deleteShortTableName(short_table_name: String, table_name: String): Unit = {
+    cassandraConnector.withSessionDo(session => {
+      session.execute(
+        s"""
+           |delete from $database.table_relation
+           |where short_table_name='$short_table_name'
+           |if table_name='$table_name'
+        """.stripMargin)
+    })
+  }
+
+  def addShortTableName(short_table_name: String,
+                        table_name: String): Unit = {
+    cassandraConnector.withSessionDo(session => {
+      val res = session.execute(
+        s"""
+           |insert into $database.table_relation
+           |(short_table_name,table_name)
+           |values ('$short_table_name', '$table_name')
+           |if not exists
+        """.stripMargin)
+      if (!res.wasApplied()) {
+        throw StarLakeErrors.failedAddShortTableNameException(short_table_name)
+      }
+    })
+  }
+
+  def updateTableShortName(table_name: String,
+                           table_id: String,
+                           short_table_name: String): Unit = {
+    cassandraConnector.withSessionDo(session => {
+      session.execute(
+        s"""
+           |update $database.table_info set short_table_name='$short_table_name'
+           |where table_name='$table_name'
+           |if short_table_name='$defaultValue' and table_id='$table_id'
+        """.stripMargin)
     })
   }
 

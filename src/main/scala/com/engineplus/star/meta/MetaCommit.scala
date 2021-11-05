@@ -22,14 +22,20 @@ import com.engineplus.star.meta.Redo._
 import com.engineplus.star.meta.RollBack._
 import com.engineplus.star.meta.UndoLog._
 import org.apache.spark.internal.Logging
+import org.apache.spark.sql.star.Snapshot
+import org.apache.spark.sql.star.commands.{DropPartitionCommand, DropTableCommand}
 import org.apache.spark.sql.star.exception._
-import org.apache.spark.sql.star.utils.{MetaInfo, PartitionInfo, commitStateInfo}
+import org.apache.spark.sql.star.material_view.ConstructQueryInfo
+import org.apache.spark.sql.star.utils._
 
 import scala.collection.mutable.ArrayBuffer
 
-object MetaCommit extends Logging{
+object MetaCommit extends Logging {
   //meta commit process
-  def doMetaCommit(meta_info: MetaInfo, changeSchema: Boolean, times: Int = 0): Unit = {
+  def doMetaCommit(meta_info: MetaInfo,
+                   changeSchema: Boolean,
+                   commitOptions: CommitOptions,
+                   times: Int = 0): Unit = {
     //add commit type undo log, generate commit_id
     val commit_id = generateCommitIdToAddUndoLog(
       meta_info.table_info.table_name,
@@ -38,6 +44,9 @@ object MetaCommit extends Logging{
       meta_info.batch_id)
 
     try {
+      //add undo log and take locks for short table name and material view
+      takeLockOfShortTableNameAndMaterialView(meta_info.table_info, commitOptions, commit_id)
+
       //hold all needed partition lock
       var new_meta_info = takePartitionsWriteLock(meta_info, commit_id)
 
@@ -63,6 +72,9 @@ object MetaCommit extends Logging{
         updateSchema(new_meta_info)
       }
 
+      //process short table name and material view
+      processShortTableNameAndMaterialView(new_meta_info, commitOptions)
+
       //add/update files info to table data_info, release partition lock and delete undo log
       commitMetaInfo(new_meta_info, changeSchema)
 
@@ -70,9 +82,9 @@ object MetaCommit extends Logging{
       case e: MetaRetryException =>
         e.printStackTrace()
         logInfo("!!!!!!! Error Retry commit id: " + commit_id)
-        rollBackUpdate(meta_info, commit_id, changeSchema)
+        rollBackUpdate(meta_info, commit_id, changeSchema, commitOptions)
         if (times < MetaUtils.MAX_COMMIT_ATTEMPTS) {
-          doMetaCommit(meta_info, changeSchema, times + 1)
+          doMetaCommit(meta_info, changeSchema, commitOptions, times + 1)
         } else {
           throw StarLakeErrors.commitFailedReachLimit(
             meta_info.table_info.table_name,
@@ -81,7 +93,7 @@ object MetaCommit extends Logging{
         }
 
       case e: Throwable =>
-        rollBackUpdate(meta_info, commit_id, changeSchema)
+        rollBackUpdate(meta_info, commit_id, changeSchema, commitOptions)
         throw e
     }
 
@@ -149,6 +161,126 @@ object MetaCommit extends Logging{
     }
   }
 
+  def takeLockOfShortTableNameAndMaterialView(tableInfo: TableInfo,
+                                              commitOptions: CommitOptions,
+                                              commit_id: String): Unit = {
+    //lock short table name if defined, it will quickly failed when another user committing the same name
+    if (commitOptions.shortTableName.isDefined) {
+      //add short table name undo log
+      addShortTableNameUndoLog(table_name = tableInfo.table_name,
+        table_id = tableInfo.table_id,
+        commit_id = commit_id,
+        short_table_name = commitOptions.shortTableName.get
+      )
+      //add short name relation
+      MetaVersion.addShortTableName(commitOptions.shortTableName.get, tableInfo.table_name)
+    }
+    //if this table is a material view
+    if (commitOptions.materialInfo.isDefined) {
+      val materialInfo = commitOptions.materialInfo.get
+      val shortTableName = if (materialInfo.isCreatingView) {
+        commitOptions.shortTableName.get
+      } else {
+        tableInfo.short_table_name.get
+      }
+      //add material undo log
+      addMaterialUndoLog(table_name = tableInfo.table_name,
+        table_id = tableInfo.table_id,
+        commit_id = commit_id,
+        short_table_name = shortTableName,
+        sql_text = materialInfo.sqlText,
+        relation_tables = materialInfo.relationTables.map(_.toString).mkString(","),
+        auto_update = materialInfo.autoUpdate,
+        is_creating_view = materialInfo.isCreatingView,
+        view_info = ConstructQueryInfo.buildJson(materialInfo.info))
+
+      //lock material view table to prevent changes by other commit
+      lockMaterialViewName(
+        commit_id,
+        shortTableName,
+        materialInfo.isCreatingView)
+
+      if (materialInfo.isCreatingView) {
+        //lock material relation table to prevent changes on relation tables by other commit
+        commitOptions.materialInfo.get.relationTables.foreach(table => {
+          lockMaterialRelation(commit_id = commit_id, table_id = table.tableId, table_name = table.tableName)
+        })
+      }
+    }
+  }
+
+  def processShortTableNameAndMaterialView(new_meta_info: MetaInfo, commitOptions: CommitOptions): Unit = {
+    //set short name for this table
+    if (commitOptions.shortTableName.isDefined) {
+      //add short name to table_info
+      MetaVersion.updateTableShortName(
+        new_meta_info.table_info.table_name,
+        new_meta_info.table_info.table_id,
+        commitOptions.shortTableName.get)
+
+      deleteUndoLog(
+        commit_type = UndoLogType.ShortTableName.toString,
+        table_id = new_meta_info.table_info.table_id,
+        commit_id = new_meta_info.commit_id
+      )
+    }
+    //if this table is a material view
+    if (commitOptions.materialInfo.isDefined) {
+      val materialInfo = commitOptions.materialInfo.get
+      val shortTableName = if (commitOptions.shortTableName.isDefined) {
+        commitOptions.shortTableName.get
+      } else {
+        new_meta_info.table_info.short_table_name.get
+      }
+      if (materialInfo.isCreatingView) {
+        //queryInfo may very big and exceed 64kb limit, so try to split it to some fragment if value is too long
+        val view_info_index = getUndoLogInfo(
+          UndoLogType.Material.toString,
+          new_meta_info.table_info.table_id,
+          new_meta_info.commit_id)
+          .head.view_info
+        //add material view
+        MaterialView.addMaterialView(
+          shortTableName,
+          new_meta_info.table_info.table_name,
+          new_meta_info.table_info.table_id,
+          materialInfo.relationTables.map(_.toString).mkString(","),
+          materialInfo.sqlText,
+          materialInfo.autoUpdate,
+          view_info_index)
+        //unlock material view
+        unlockMaterialViewName(new_meta_info.commit_id, shortTableName)
+
+        //update material relation
+        materialInfo.relationTables.foreach(table => {
+          //update
+          updateMaterialRelation(
+            table_id = table.tableId,
+            table_name = table.tableName,
+            view_name = shortTableName)
+          //unlock material relation
+          unlockMaterialRelation(commit_id = new_meta_info.commit_id, table_id = table.tableId)
+        })
+      } else {
+        //update material view
+        val view_name = new_meta_info.table_info.short_table_name.get
+        MaterialView.updateMaterialView(
+          view_name,
+          materialInfo.relationTables.map(_.toString).mkString(","),
+          materialInfo.autoUpdate
+        )
+        //unlock material view
+        unlockMaterialViewName(new_meta_info.commit_id, view_name)
+      }
+
+      //delete undo log
+      deleteUndoLog(
+        commit_type = UndoLogType.Material.toString,
+        table_id = new_meta_info.table_info.table_id,
+        commit_id = new_meta_info.commit_id)
+
+    }
+  }
 
   def lockSinglePartition(partition_info: PartitionInfo,
                           commit_id: String,
@@ -297,34 +429,85 @@ object MetaCommit extends Logging{
 
   }
 
+  def updateMaterialRelation(table_id: String,
+                             table_name: String,
+                             view_name: String): Unit = {
+    val existsViews = MaterialView.getMaterialRelationInfo(table_id)
+    val newViews = if (existsViews.isEmpty) {
+      view_name
+    } else {
+      existsViews + "," + view_name
+    }
+
+    MaterialView.updateMaterialRelationInfo(table_id, table_name, newViews)
+  }
+
+
+  def formatLockMaterialView(name: String): String = {
+    s"material_$name"
+  }
+
+  def lockMaterialViewName(commit_id: String, materialViewName: String, isCreating: Boolean): Unit = {
+    val (lock_flag, last_commit_id) = MetaLock.lock(formatLockMaterialView(materialViewName), commit_id)
+    lazy val table_exists = MaterialView.isMaterialViewExists(materialViewName)
+    if (!lock_flag || (isCreating && table_exists)) {
+      //filed quickly if another user is creating or material view is already created very recently
+      throw StarLakeErrors.failedLockMaterialViewName(materialViewName)
+    }
+  }
+
+  def unlockMaterialViewName(commit_id: String, materialViewName: String): Unit = {
+    MetaLock.unlock(formatLockMaterialView(materialViewName), commit_id)
+  }
+
+  def lockMaterialRelation(commit_id: String, table_id: String, table_name: String): Unit = {
+    val (lock_flag, last_commit_id) = MetaLock.lock(formatLockMaterialView(table_id), commit_id)
+    if (!lock_flag) {
+      //check state and resolve last commit
+      resolveLastCommit(table_name, table_id, last_commit_id)
+
+      //retry
+      lockMaterialRelation(commit_id, table_id, table_name)
+    }
+  }
+
+  def unlockMaterialRelation(commit_id: String, table_id: String): Unit = {
+    MetaLock.unlock(formatLockMaterialView(table_id), commit_id)
+  }
 
   def lockSchema(meta_info: MetaInfo): Unit = {
     val (lock_flag, last_commit_id) = MetaLock.lock(meta_info.table_info.table_id, meta_info.commit_id)
     if (!lock_flag) {
-      //get state of last commit
-      val state_info = getCommitState(
-        meta_info.table_info.table_name,
-        meta_info.table_info.table_id,
-        last_commit_id)
+      //check state and resolve last commit
+      resolveLastCommit(meta_info.table_info.table_name, meta_info.table_info.table_id, last_commit_id)
 
-      logInfo(s"Another job's commit state is ${state_info.state.toString} ~~")
-
-      state_info.state match {
-        case CommitState.Committing | CommitState.RollBacking | CommitState.Redoing =>
-          TimeUnit.SECONDS.sleep(MetaUtils.WAIT_LOCK_INTERVAL)
-
-        case CommitState.CommitTimeout | CommitState.RollBackTimeout =>
-          rollBackCommit(state_info.table_id, state_info.commit_id, state_info.tag, state_info.timestamp)
-
-        case CommitState.Clean =>
-          cleanRollBackCommit(state_info.table_id, state_info.commit_id, state_info.table_id)
-
-        case CommitState.RedoTimeout =>
-          redoCommit(state_info.table_name, state_info.table_id, state_info.commit_id)
-          throw StarLakeErrors.schemaChangedException(state_info.table_name)
-      }
       //retry
       lockSchema(meta_info)
+    }
+  }
+
+  //check the state of this commit, and resolve it according to its state
+  def resolveLastCommit(table_name: String, table_id: String, last_commit_id: String): Unit = {
+    //get state of last commit
+    val state_info = getCommitState(
+      table_name,
+      table_id,
+      last_commit_id)
+
+    logInfo(s"Another job's commit state is ${state_info.state.toString} ~~")
+
+    state_info.state match {
+      case CommitState.Committing | CommitState.RollBacking | CommitState.Redoing =>
+        TimeUnit.SECONDS.sleep(MetaUtils.WAIT_LOCK_INTERVAL)
+
+      case CommitState.CommitTimeout | CommitState.RollBackTimeout =>
+        rollBackCommit(state_info.table_id, state_info.commit_id, state_info.tag, state_info.timestamp)
+
+      case CommitState.Clean =>
+        cleanRollBackCommit(state_info.table_id, state_info.commit_id, state_info.table_id)
+
+      case CommitState.RedoTimeout =>
+        redoCommit(state_info.table_name, state_info.table_id, state_info.commit_id)
     }
   }
 
@@ -399,13 +582,12 @@ object MetaCommit extends Logging{
     MetaVersion.updateTableSchema(
       table_name,
       table_id,
-      commit_id,
       schema_index,
       meta_info.table_info.configuration,
       new_read_version)
 
     MetaLock.unlock(table_id, commit_id)
-    deleteUndoLogByCommitId(UndoLogType.Schema.toString, table_id, commit_id)
+    deleteUndoLog(UndoLogType.Schema.toString, table_id, commit_id)
   }
 
 
@@ -428,6 +610,14 @@ object MetaCommit extends Logging{
           write_version,
           commit_id,
           file.modification_time)
+
+        deleteUndoLog(
+          commit_type = UndoLogType.ExpireFile.toString,
+          table_id = table_id,
+          commit_id = commit_id,
+          range_id = range_id,
+          file_path = file.file_path
+        )
       }
       for (file <- partition_info.add_files) {
         DataOperation.addNewDataFile(
@@ -440,30 +630,44 @@ object MetaCommit extends Logging{
           file.modification_time,
           file.file_exist_cols,
           file.is_base_file)
+
+        deleteUndoLog(
+          commit_type = UndoLogType.AddFile.toString,
+          table_id = table_id,
+          commit_id = commit_id,
+          range_id = range_id,
+          file_path = file.file_path
+        )
       }
 
-      MetaVersion.updatePartitionReadVersion(
-        table_id,
-        range_id,
-        table_name,
-        range_value,
-        write_version,
-        commit_id,
-        partition_info.delta_file_num,
-        partition_info.be_compacted)
+      MetaVersion.updatePartitionInfo(
+        table_id = table_id,
+        range_value = range_value,
+        range_id = range_id,
+        write_version = write_version,
+        delta_file_num = partition_info.delta_file_num,
+        be_compacted = partition_info.be_compacted)
 
       MetaLock.unlock(partition_info.range_id, commit_id)
+      deleteUndoLog(
+        commit_type = UndoLogType.Partition.toString,
+        table_id = table_id,
+        commit_id = commit_id,
+        range_id = range_id
+      )
     }
-    deleteUndoLogByCommitId(UndoLogType.AddFile.toString, table_id, commit_id)
-    deleteUndoLogByCommitId(UndoLogType.ExpireFile.toString, table_id, commit_id)
-    deleteUndoLogByCommitId(UndoLogType.Partition.toString, table_id, commit_id)
 
     //if it is streaming job, streaming info should be updated
-    if(meta_info.query_id.nonEmpty && meta_info.batch_id >= 0){
+    if (meta_info.query_id.nonEmpty && meta_info.batch_id >= 0) {
       StreamingRecord.updateStreamingInfo(table_id, meta_info.query_id, meta_info.batch_id, System.currentTimeMillis())
     }
 
-    deleteUndoLogByCommitId(UndoLogType.Commit.toString, table_id, commit_id)
+    deleteUndoLog(
+      commit_type = UndoLogType.Commit.toString,
+      table_id = table_id,
+      commit_id = commit_id
+    )
+
     logInfo(s"{{{{{{commit: $commit_id success!!!}}}}}}")
   }
 
@@ -497,7 +701,7 @@ object MetaCommit extends Logging{
     val update_file_info_arr = meta_info.partitionInfoArray
     meta_info.commit_type match {
       case DeltaCommit => //files conflict checking is not required when committing delta files
-      case CompactionCommit | PartCompactionCommit=>
+      case CompactionCommit | PartCompactionCommit =>
         //when committing compaction job, it just need to check that the read files have not been deleted
         DataOperation.checkDataInfo(meta_info.commit_id, update_file_info_arr, false, true)
       case _ =>
@@ -507,9 +711,33 @@ object MetaCommit extends Logging{
 
 
   //check and redo timeout commits before read
-  def checkAndRedoCommit(table_id: String): Unit = {
+  def checkAndRedoCommit(snapshot: Snapshot): Unit = {
+    val table_id: String = snapshot.getTableInfo.table_id
     val limit_timestamp = System.currentTimeMillis() - MetaUtils.COMMIT_TIMEOUT
-    val logInfo = UndoLog.getTimeoutUndoLogInfo(UndoLogType.Commit.toString, table_id, limit_timestamp)
+
+    //drop table command
+    val dropTableInfo = getUndoLogInfo(
+      UndoLogType.DropTable.toString,
+      table_id,
+      UndoLogType.DropTable.toString)
+    if (dropTableInfo.nonEmpty) {
+      DropTableCommand.dropTable(snapshot)
+      throw StarLakeErrors.tableNotExistsException(snapshot.getTableName)
+    }
+    //drop partition command
+    val dropPartitionInfo = getUndoLogInfo(
+      UndoLogType.DropPartition.toString,
+      table_id,
+      UndoLogType.DropPartition.toString)
+    if (dropPartitionInfo.nonEmpty) {
+      dropPartitionInfo.foreach(d => {
+        DropPartitionCommand.dropPartition(d.table_name, d.table_id, d.range_value, d.range_id)
+      })
+    }
+
+
+    //commit
+    val logInfo = getTimeoutUndoLogInfo(UndoLogType.Commit.toString, table_id, limit_timestamp)
 
     var flag = true
     logInfo.foreach(log => {
@@ -523,16 +751,18 @@ object MetaCommit extends Logging{
     })
 
     if (!flag) {
-      checkAndRedoCommit(table_id)
+      checkAndRedoCommit(snapshot)
     }
 
   }
 
-  def cleanUndoLog(table_id: String): Unit = {
-    checkAndRedoCommit(table_id)
+  def cleanUndoLog(snapshot: Snapshot): Unit = {
+    val table_id: String = snapshot.getTableInfo.table_id
+    checkAndRedoCommit(snapshot)
     val limit_timestamp = System.currentTimeMillis() - MetaUtils.UNDO_LOG_TIMEOUT
 
-    val log_info_seq = UndoLogType.getAllType
+    val allType = UndoLogType.getAllType
+    val log_info_seq = allType
       .map(UndoLog.getTimeoutUndoLogInfo(_, table_id, limit_timestamp))
       .flatMap(_.toSeq)
 
@@ -542,7 +772,7 @@ object MetaCommit extends Logging{
     //delete undo log directly if table is not exists
     commit_log_info_seq
       .filter(log => !MetaVersion.isTableIdExists(log.table_name, log.table_id))
-      .foreach(log => deleteUndoLogByCommitId(UndoLogType.Commit.toString, table_id, log.commit_id))
+      .foreach(log => deleteUndoLog(UndoLogType.Commit.toString, table_id, log.commit_id))
 
     //if a commit_id don't has corresponding undo log with commit type, it should be clean
     val skip_commit_id =
@@ -556,16 +786,17 @@ object MetaCommit extends Logging{
         log.commit_type match {
           case t: String if t.equalsIgnoreCase(UndoLogType.Schema.toString) =>
             MetaLock.unlock(log.table_id, log.commit_id)
-            deleteUndoLogByCommitId(UndoLogType.Schema.toString, table_id, log.commit_id)
           case t: String if t.equalsIgnoreCase(UndoLogType.Partition.toString) =>
             MetaLock.unlock(log.range_id, log.commit_id)
-            deleteUndoLogByCommitId(UndoLogType.Partition.toString, table_id, log.commit_id)
-          case t: String if t.equalsIgnoreCase(UndoLogType.AddFile.toString) =>
-            deleteUndoLogByCommitId(UndoLogType.AddFile.toString, table_id, log.commit_id)
-          case t: String if t.equalsIgnoreCase(UndoLogType.ExpireFile.toString) =>
-            deleteUndoLogByCommitId(UndoLogType.ExpireFile.toString, table_id, log.commit_id)
-          case _ => StarLakeErrors.unknownUndoLogTypeException(_)
+          case t: String if t.equalsIgnoreCase(UndoLogType.Material.toString) =>
+            unlockMaterialViewName(commit_id = log.commit_id, log.short_table_name)
+            log.relation_tables.split(",").map(m => RelationTable.build(m))
+              .foreach(table => {
+                unlockMaterialRelation(commit_id = log.commit_id, table_id = table.tableId)
+              })
+
         }
+        deleteUndoLog(log.commit_type, table_id, log.commit_id, log.range_id, log.file_path)
       })
 
     //cleanup the timeout streaming info

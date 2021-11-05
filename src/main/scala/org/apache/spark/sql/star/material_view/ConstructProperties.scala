@@ -14,17 +14,20 @@
  * limitations under the License.
  */
 
-package org.apache.spark.sql.catalyst.plans.logical
+package org.apache.spark.sql.star.material_view
 
-import org.apache.spark.sql.catalyst.expressions.Attribute
-import org.apache.spark.sql.types.StructType
+import org.apache.spark.sql.types.DataType
 
-case class StarUpsert(target: LogicalPlan,
-                      source: LogicalPlan,
-                      condition: String,
-                      migratedSchema: Option[StructType] = None) extends Command {
+trait ConstructProperties {
 
-  override def children: Seq[LogicalPlan] = Seq(target, source)
+  def addRangeInfo(dataType: DataType, colName: String, limit: Any, rangeType: String): Unit
 
-  override def output: Seq[Attribute] = Seq.empty
+  def addConditionEqualInfo(left: String, right: String): Unit
+
+  def addColumnEqualInfo(left: String, right: String): Unit
+
+  def addConditionOrInfo(orInfo: OrInfo): Unit
+
+  def addOtherInfo(info: String): Unit
+
 }

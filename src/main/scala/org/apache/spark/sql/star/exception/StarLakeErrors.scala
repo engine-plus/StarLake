@@ -23,11 +23,10 @@ import org.apache.spark.sql.catalyst.TableIdentifier
 import org.apache.spark.sql.catalyst.analysis.UnresolvedAttribute
 import org.apache.spark.sql.catalyst.expressions.{Attribute, Expression}
 import org.apache.spark.sql.catalyst.plans.logical.LogicalPlan
-import org.apache.spark.sql.connector.read.Scan
 import org.apache.spark.sql.internal.SQLConf
 import org.apache.spark.sql.star.catalog.StarLakeCatalog
 import org.apache.spark.sql.star.schema.{Invariant, InvariantViolationException, SchemaUtils}
-import org.apache.spark.sql.star.{StarLakeConfig, StarLakeOptions, StarLakeTableIdentifier}
+import org.apache.spark.sql.star.{StarLakeConfig, StarLakeOptions}
 import org.apache.spark.sql.streaming.OutputMode
 import org.apache.spark.sql.types.{DataType, StructField, StructType}
 
@@ -70,6 +69,22 @@ object StarLakeErrors {
       s"""
          |Error: Failed to init meta info for table: $table_name,
          |this table may already exists.
+       """.stripMargin.split("\n").mkString(" ").trim)
+  }
+
+  def failedAddShortTableNameException(short_table_name: String): MetaException = {
+    new MetaException(
+      s"""
+         |Error: Failed to add short table name for table: $short_table_name,
+         |this table may already exists.
+       """.stripMargin.split("\n").mkString(" ").trim)
+  }
+
+  def failedAddMaterialViewException(view_name: String): MetaException = {
+    new MetaException(
+      s"""
+         |Error: Failed to add material view: $view_name,
+         |this view may already exists.
        """.stripMargin.split("\n").mkString(" ").trim)
   }
 
@@ -131,8 +146,8 @@ object StarLakeErrors {
       commit_id)
   }
 
-  def tableExistsException(table_path: String): Throwable = {
-    new AnalysisException(s"Table $table_path is already exists.")
+  def tableExistsException(table: String): Throwable = {
+    new AnalysisException(s"Table $table already exists.")
   }
 
   def tableNotExistsException(table_path: String): Throwable = {
@@ -244,8 +259,8 @@ object StarLakeErrors {
     new AnalysisException(s"Subqueries are not supported in the $op (condition = ${cond.sql}).")
   }
 
-  def notAStarLakeTableException(starTableIdentifier: StarLakeTableIdentifier): Throwable = {
-    new AnalysisException(s"$starTableIdentifier is not an Star table.")
+  def notAStarLakeTableException(starTableName: String): Throwable = {
+    new AnalysisException(s"$starTableName is not an Star table.")
   }
 
   def notAnStarLakeSourceException(command: String, plan: Option[LogicalPlan] = None): Throwable = {
@@ -494,11 +509,6 @@ object StarLakeErrors {
 
   }
 
-  def unknownUndoLogTypeException(logType: String): Throwable = {
-    throw new AnalysisException(
-      s"Unknown undo log type `$logType` has been found.")
-  }
-
   def tableNotFoundException(table_name: String, table_id: String): Throwable = {
     throw new AnalysisException(
       s"Table `$table_name` with id=`$table_id` was not found.")
@@ -578,15 +588,15 @@ object StarLakeErrors {
        """.stripMargin.trim)
   }
 
-  def useMergeOperatorForNonStarTableField(fieldName: String): Throwable ={
+  def useMergeOperatorForNonStarTableField(fieldName: String): Throwable = {
     new AnalysisException(s"Field `$fieldName` is not in StarTable, you can't perform merge operator on it")
   }
 
-  def illegalMergeOperatorException(cls: Any): Throwable ={
+  def illegalMergeOperatorException(cls: Any): Throwable = {
     new AnalysisException(s"${cls.toString} is not a legal merge operator class")
   }
 
-  def multiMergeOperatorException(fieldName: String): Throwable ={
+  def multiMergeOperatorException(fieldName: String): Throwable = {
     new AnalysisException(s"Column `$fieldName` has multi merge operators, but only one merge operator can be set.")
   }
 
@@ -594,9 +604,62 @@ object StarLakeErrors {
     new MetaException("Compaction with part merging commit failed, another job may had compacted this partition.")
   }
 
+  def failedLockShortTableName(table: String): Throwable = {
+    new MetaException(
+      s"""Table `$table` is created by another user.""")
+  }
 
+  def failedLockMaterialViewName(table: String): Throwable = {
+    new MetaException(
+      s"""Material view `$table` is created by another user.""")
+  }
 
+  def updateMaterialViewWithCommonOperatorException(): Throwable = {
+    new AnalysisException(
+      s"Material view can't be changed by common insert/update/upsert, you should use its own function.")
+  }
 
+  def notMaterialViewException(table: String, shortName: String): Throwable = {
+    new AnalysisException(
+      s"""Table `$table`(short table name: $shortName) is not material view.""")
+  }
+
+  def materialViewBuildWithNonStarTableException(): Throwable = {
+    new AnalysisException(
+      s"""Material view can only build with star table, but non-star table was found.""")
+  }
+
+  def materialViewBuildWithAnotherMaterialViewException(): Throwable = {
+    new AnalysisException(
+      s"""Material view can't build with another material view.""")
+  }
+
+  def materialViewHasStaleDataException(table: String): Throwable = {
+    new AnalysisException(
+      s"""Data of material view `$table` is staled, please update this view before read,
+         |or set spark.engineplus.star.allow.stale.materialView to true if you can accept staled data.""".stripMargin)
+  }
+
+  def unsupportedDataTypeInMaterialRewriteQueryException(dataType: DataType): Throwable = {
+    new AnalysisException(
+      s"""DataType ${dataType.simpleString} is not supported in query rewrite,
+         |if you want to use it, you can disable query rewrite by setting
+         |spark.engineplus.star.material.query.rewrite.enable to false.
+       """.stripMargin)
+  }
+
+  def unsupportedLogicalPlanWhileRewriteQueryException(plan: String): Throwable = {
+    new AnalysisException(
+      s"""Found unsupported logical plan while rewrite Query.
+          Unsupported plan:
+          $plan
+       """.stripMargin)
+  }
+
+  def canNotCreateMaterialViewOrRewriteQueryException(reason: String): Throwable = {
+    new AnalysisException(
+      s"""Can't create material view or rewrite query plan because: $reason.""")
+  }
 
 
 }

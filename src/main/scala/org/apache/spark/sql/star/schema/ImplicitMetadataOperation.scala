@@ -19,9 +19,12 @@ package org.apache.spark.sql.star.schema
 import org.apache.spark.internal.Logging
 import org.apache.spark.sql.star.TransactionCommit
 import org.apache.spark.sql.star.exception.{MetadataMismatchErrorBuilder, StarLakeErrors}
-import org.apache.spark.sql.star.utils.{PartitionUtils, TableInfo}
+import org.apache.spark.sql.star.material_view.{ConstructQueryInfo, MaterialViewUtils}
+import org.apache.spark.sql.star.utils.{MaterialViewInfo, PartitionUtils, RelationTable, TableInfo}
 import org.apache.spark.sql.types.{StructField, StructType}
 import org.apache.spark.sql.{Dataset, SparkSession}
+
+import scala.collection.mutable.ArrayBuffer
 
 /**
   * A trait that writers into StarTable can extend to update the schema of the table.
@@ -33,8 +36,12 @@ trait ImplicitMetadataOperation extends Logging {
   protected val rangePartitions: String
   protected val hashPartitions: String
   protected val hashBucketNum: Int
+  protected val shortTableName: Option[String]
+  protected val createMaterialView: Boolean = false
+  protected val materialSQLText: String = ""
+  protected val materialAutoUpdate: Boolean = false
 
-  private def transPartitionColums(partitionColumns: String): Seq[String] = {
+  private def transPartitionColumns(partitionColumns: String): Seq[String] = {
     if (partitionColumns.equalsIgnoreCase("")) {
       Seq.empty[String]
     } else {
@@ -65,7 +72,8 @@ trait ImplicitMetadataOperation extends Logging {
       tc,
       data.schema,
       configuration,
-      isOverwriteMode
+      isOverwriteMode,
+      Some(data)
     )
   }
 
@@ -73,7 +81,8 @@ trait ImplicitMetadataOperation extends Logging {
                                      tc: TransactionCommit,
                                      schema: StructType,
                                      configuration: Map[String, String],
-                                     isOverwriteMode: Boolean): Unit = {
+                                     isOverwriteMode: Boolean,
+                                     data: Option[Dataset[_]] = None): Unit = {
     val table_info = tc.tableInfo
 
     /**
@@ -82,7 +91,7 @@ trait ImplicitMetadataOperation extends Logging {
       */
     val (realRangeColumns, realHashColumns, realHashBucketNum) =
       if (tc.isFirstCommit) {
-        (transPartitionColums(rangePartitions), transPartitionColums(hashPartitions), hashBucketNum)
+        (transPartitionColumns(rangePartitions), transPartitionColumns(hashPartitions), hashBucketNum)
       } else {
         //If the partition parameters are set and the table already exists, the settings must be the same as the table
         if (rangePartitions.nonEmpty && !table_info.range_column.equalsIgnoreCase(rangePartitions)) {
@@ -94,9 +103,42 @@ trait ImplicitMetadataOperation extends Logging {
         if (hashBucketNum != -1 && table_info.bucket_num != hashBucketNum) {
           throw StarLakeErrors.hashBucketNumConflictException(table_info.bucket_num, hashBucketNum)
         }
-        (transPartitionColums(table_info.range_column), transPartitionColums(table_info.hash_column), table_info.bucket_num)
+        (transPartitionColumns(table_info.range_column), transPartitionColumns(table_info.hash_column), table_info.bucket_num)
       }
 
+    if (shortTableName.isDefined) {
+      tc.setShortTableName(shortTableName.get)
+
+      //set material info if creating material view
+      if (createMaterialView) {
+        if (!tc.isFirstCommit) {
+          throw StarLakeErrors.tableExistsException(tc.tableInfo.table_name)
+        }
+        assert(materialSQLText.nonEmpty)
+        assert(data.isDefined)
+
+        //parse material info from logical plan
+        val construct = new ConstructQueryInfo
+        val plan = data.get.logicalPlan
+        MaterialViewUtils.parseOutputInfo(plan, construct)
+        MaterialViewUtils.parseMaterialInfo(plan, construct, false)
+        val viewInfo = construct.buildQueryInfo()
+
+        //todo: merge it into above parse
+        //get relation table info
+        val relationTables = new ArrayBuffer[RelationTable]()
+        MaterialViewUtils.parseRelationTableInfo(data.get.queryExecution.executedPlan, relationTables)
+
+        tc.setMaterialInfo(
+          MaterialViewInfo(
+            shortTableName.get,
+            materialSQLText,
+            relationTables,
+            materialAutoUpdate,
+            true,
+            viewInfo))
+      }
+    }
 
     val normalizedRangePartitionCols =
       normalizePartitionColumns(spark, realRangeColumns, schema)

@@ -41,6 +41,15 @@ object StarLakeUtils extends PredicateHelper {
   val MERGE_OP_COL = "_star_merge_col_name_"
   val MERGE_OP = "_star_merge_op_"
 
+  lazy val USE_MATERIAL_REWRITE = "_star_use_material_rewrite_"
+
+
+  def executeWithoutQueryRewrite[T](sparkSession: SparkSession)(f: => T): Unit = {
+    sparkSession.conf.set(USE_MATERIAL_REWRITE, "false")
+    f
+    sparkSession.conf.set(USE_MATERIAL_REWRITE, "true")
+  }
+
   def getClass(className: String): Class[_] = {
     Class.forName(className, true, Utils.getContextOrSparkClassLoader)
   }
@@ -153,7 +162,7 @@ object StarLakeUtils extends PredicateHelper {
   def replaceFileIndexV2(target: LogicalPlan,
                          files: Seq[DataFileInfo]): LogicalPlan = {
     EliminateSubqueryAliases(target) match {
-      case sr @ DataSourceV2Relation(tbl: StarLakeTableV2,_,_,_,_) =>
+      case sr@DataSourceV2Relation(tbl: StarLakeTableV2, _, _, _, _) =>
         sr.copy(table = tbl.copy(userDefinedFileIndex = Option(BatchDataFileIndexV2(tbl.spark, tbl.snapshotManagement, files))))
 
       case _ => throw StarLakeErrors.starRelationIllegalException()
@@ -169,6 +178,7 @@ object StarLakeUtils extends PredicateHelper {
     (pathName.startsWith(".") || pathName.startsWith("_")) &&
       !partitionColumnNames.exists(c => pathName.startsWith(c ++ "="))
   }
+
 
 }
 
@@ -231,7 +241,7 @@ object StarLakeTableV2ScanRelation {
 }
 
 
-class MergeOpLong extends MergeOperator[Long]{
+class MergeOpLong extends MergeOperator[Long] {
   override def mergeData(input: Seq[Long]): Long = {
     input.sum
   }

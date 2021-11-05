@@ -59,7 +59,7 @@ object StarLakeSQLConf {
 
   val CLEANUP_PARALLELISM: ConfigEntry[Int] =
     buildConf("cleanup.parallelism")
-      .doc("The number of parallelism to list a collection of path recursively when cleanup, default is 50.")
+      .doc("The number of parallelism to list a collection of path recursively when cleanup, default is 200.")
       .intConf
       .createWithDefault(200)
 
@@ -69,12 +69,13 @@ object StarLakeSQLConf {
       .booleanConf
       .createWithDefault(true)
 
-  //默认的meta数据库名
+  //default meta database name
   val META_DATABASE_NAME: ConfigEntry[String] =
     buildConf("meta.database.name")
       .doc(
         """
           |Default database of meta tables in Cassandra.
+          |User should not change it unless you know what you are going to do.
         """.stripMargin)
       .stringConf
       .createWithDefault("star_meta")
@@ -156,7 +157,7 @@ object StarLakeSQLConf {
     buildConf("meta.get.lock.max.attempts")
       .doc(
         """
-          |The maximum times for a commit attempts to acquire the partition write lock.
+          |The maximum times for a commit attempts to acquire the lock.
         """.stripMargin)
       .intConf
       .createWithDefault(5)
@@ -325,6 +326,34 @@ object StarLakeSQLConf {
       .doc(
         """
           |Whether async reader can be used.
+        """.stripMargin)
+      .booleanConf
+      .createWithDefault(true)
+
+  val AUTO_UPDATE_MATERIAL_VIEW_ENABLE: ConfigEntry[Boolean] =
+    buildConf("auto.update.materialView.enable")
+      .doc(
+        """
+          |Whether update material views when data changed.
+          |If true, it will check all material views associate with
+        """.stripMargin)
+      .booleanConf
+      .createWithDefault(false)
+
+  val ALLOW_STALE_MATERIAL_VIEW: ConfigEntry[Boolean] =
+    buildConf("allow.stale.materialView")
+      .doc(
+        """
+          |If true, material view with stale data will be read.
+        """.stripMargin)
+      .booleanConf
+      .createWithDefault(false)
+
+  val MATERIAL_QUERY_REWRITE_ENABLE: ConfigEntry[Boolean] =
+    buildConf("material.query.rewrite.enable")
+      .doc(
+        """
+          |If true, material view can be used to rewrite query plan.
         """.stripMargin)
       .booleanConf
       .createWithDefault(true)
