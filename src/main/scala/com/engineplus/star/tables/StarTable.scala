@@ -498,5 +498,70 @@ object StarTable {
       .run(SparkSession.active)
   }
 
+  class TableCreator {
+    private[this] val options = new scala.collection.mutable.HashMap[String, String]
+    private[this] var writeData: Dataset[_] = _
+    private[this] var tablePath: String = _
+
+    def data(data: Dataset[_]): TableCreator = {
+      writeData = data
+      this
+    }
+
+    def path(path: String): TableCreator = {
+      tablePath = path
+      this
+    }
+
+    //set range partition columns, join with a comma
+    def rangePartitions(rangePartitions: String): TableCreator = {
+      options.put("rangePartitions", rangePartitions)
+      this
+    }
+
+    def rangePartitions(rangePartitions: Seq[String]): TableCreator = {
+      options.put("rangePartitions", rangePartitions.mkString(","))
+      this
+    }
+
+    //set hash partition columns, join with a comma
+    def hashPartitions(hashPartitions: String): TableCreator = {
+      options.put("hashPartitions", hashPartitions)
+      this
+    }
+
+    def hashPartitions(hashPartitions: Seq[String]): TableCreator = {
+      options.put("hashPartitions", hashPartitions.mkString(","))
+      this
+    }
+
+    def hashBucketNum(hashBucketNum: Int): TableCreator = {
+      options.put("hashBucketNum", hashBucketNum.toString)
+      this
+    }
+
+    def hashBucketNum(hashBucketNum: String): TableCreator = {
+      options.put("hashBucketNum", hashBucketNum)
+      this
+    }
+
+    //set a short table name
+    def shortTableName(shortTableName: String): TableCreator = {
+      options.put("shortTableName", shortTableName)
+      this
+    }
+
+    def create(): Unit = {
+      val writer = writeData.write.format(StarLakeSourceUtils.NAME).mode("overwrite")
+      options.foreach(f => writer.option(f._1, f._2))
+      writer.save(tablePath)
+    }
+
+
+  }
+
+  def createTable(data: Dataset[_], tablePath: String): TableCreator =
+    new TableCreator().data(data).path(tablePath)
+
 
 }

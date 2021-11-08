@@ -1346,6 +1346,47 @@ trait TableCreationTests
   }
 
 
+  test("create table with TableCreator - without partition and shortName") {
+    withTempDir(dir => {
+      val path = dir.getCanonicalPath
+      val data = Seq((1, "a", 12), (2, "b", 23)).toDF("i", "p", "v")
+
+      StarTable.createTable(data, path).create()
+
+      val tableInfo = SnapshotManagement(path).getTableInfoOnly
+      assert(tableInfo.range_partition_columns.isEmpty)
+      assert(tableInfo.hash_partition_columns.isEmpty)
+      assert(tableInfo.bucket_num == -1)
+      assert(tableInfo.short_table_name.isEmpty)
+      assert(!tableInfo.is_material_view)
+
+    })
+  }
+
+
+  test("create table with TableCreator - with partition and shortName") {
+    withTable("tt") {
+      withTempDir(dir => {
+        val path = dir.getCanonicalPath
+        val data = Seq((1, "a", 12), (2, "b", 23)).toDF("i", "p", "v")
+        StarTable.createTable(data, path)
+          .shortTableName("tt")
+          .rangePartitions("i")
+          .hashPartitions("p")
+          .hashBucketNum(1)
+          .create()
+
+        val tableInfo = SnapshotManagement(path).getTableInfoOnly
+        assert(tableInfo.short_table_name.get.equals("tt"))
+        assert(tableInfo.range_partition_columns.equals(Seq("i")))
+        assert(tableInfo.hash_partition_columns.equals(Seq("p")))
+        assert(tableInfo.bucket_num == 1)
+        assert(!tableInfo.is_material_view)
+
+      })
+    }
+  }
+
 }
 
 class TableCreationSuite
