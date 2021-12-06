@@ -407,7 +407,7 @@ case class MultiPartitionMergeBucketScan(sparkSession: SparkSession,
   override def getFilePartitions(conf: SQLConf,
                                  partitionedFiles: Seq[MergePartitionedFile],
                                  bucketNum: Int): Seq[MergeFilePartition] = {
-    val fileWithBucketId = partitionedFiles
+    val fileWithBucketId: Map[Int, Map[String, Seq[MergePartitionedFile]]] = partitionedFiles
       .groupBy(_.fileBucketId)
       .map(f => (f._1, f._2.groupBy(_.rangeKey)))
 

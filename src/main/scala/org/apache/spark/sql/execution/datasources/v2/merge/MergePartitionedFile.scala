@@ -39,9 +39,9 @@ case class MergePartitionedFile(partitionValues: InternalRow,
                                 length: Long,
                                 qualifiedName: String,
                                 rangeKey: String,
-                                keyInfo: Seq[(Int, DataType)], //(key_index, dataType)
-                                resultSchema: Seq[(String, DataType)], //all result columns name and type
-                                fileInfo: Seq[(String, DataType)], //file columns name and type
+                                keyInfo: Seq[KeyIndex], //(hash key index of file, dataType)
+                                resultSchema: Seq[FieldInfo], //all result columns name and type
+                                fileInfo: Seq[FieldInfo], //file columns name and type
                                 writeVersion: Long,
                                 rangeVersion: String,
                                 fileBucketId: Int, //hash split id
@@ -50,6 +50,17 @@ case class MergePartitionedFile(partitionValues: InternalRow,
     s"path: $filePath, range: $start-${start + length}, partition values: $partitionValues"
   }
 }
+
+
+//column name and type
+case class FieldInfo(fieldName: String, fieldType: DataType)
+
+/**
+  * @param index hash key index in file result schema, such as fileResultScheme:[a,k,b], keyIndex is 1
+  * @param keyType DataType of key field
+  */
+case class KeyIndex(index: Int, keyType: DataType)
+
 
 /**
   * A collection of file blocks that should be read as a single task

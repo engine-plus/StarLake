@@ -20,7 +20,7 @@ import org.apache.commons.lang3.StringUtils
 import org.apache.spark.sql.catalyst.InternalRow
 import org.apache.spark.sql.catalyst.util.{ArrayData, MapData}
 import org.apache.spark.sql.connector.read.PartitionReader
-import org.apache.spark.sql.execution.datasources.v2.merge.MergePartitionedFile
+import org.apache.spark.sql.execution.datasources.v2.merge.{FieldInfo, KeyIndex, MergePartitionedFile}
 import org.apache.spark.sql.execution.datasources.v2.merge.parquet.batch.{MergeLogic, MergeOperatorColumnarBatchRow, MergeOptimizeHeap, MergeUtils}
 import org.apache.spark.sql.types._
 import org.apache.spark.sql.vectorized.ColumnarBatch
@@ -29,10 +29,14 @@ import org.apache.spark.unsafe.types.{CalendarInterval, UTF8String}
 import scala.collection.mutable
 import scala.collection.mutable.ArrayBuffer
 
+/**
+  * @param filesInfo (file, columnar reader of file)
+  */
 class MergeMultiFileWithOperator(filesInfo: Seq[(MergePartitionedFile, PartitionReader[ColumnarBatch])],
                                  mergeOperatorInfo: Map[String, MergeOperator[Any]]) extends MergeLogic {
 
-  val resultSchema: Seq[(String, DataType)] = filesInfo.head._1.resultSchema
+  //all result columns name and type
+  val resultSchema: Seq[FieldInfo] = filesInfo.head._1.resultSchema
   var temporaryStoreLastRow = false
 
   /**
@@ -40,7 +44,7 @@ class MergeMultiFileWithOperator(filesInfo: Seq[(MergePartitionedFile, Partition
     * Map[version->keyInfo]
     * keyInfo:Array[(Int,DataType)]
     */
-  var versionKeyInfoMap: Map[Long, Array[(Int, DataType)]] = filesInfo.map(info => {
+  var versionKeyInfoMap: Map[Long, Array[KeyIndex]] = filesInfo.map(info => {
     info._1.writeVersion -> info._1.keyInfo.toArray
   }).toMap
 
@@ -48,33 +52,37 @@ class MergeMultiFileWithOperator(filesInfo: Seq[(MergePartitionedFile, Partition
     * The corresponding index of each field in mergeRow.
     * Map:[fieldName->index] , index: Indicates the position of the field after the merge
     */
-  val fieldIndexMap: Map[String, Int] = resultSchema.zipWithIndex.map(field_index => {
-    field_index._1._1 -> field_index._2
+  val fieldIndexMap: Map[String, Int] = resultSchema.zipWithIndex.map(m => {
+    m._1.fieldName -> m._2
   }).toMap
 
   /**
-    * Replace the field name with the index
+    * Replace the field name with the index.
     * The order of the array elements represents the order of the entire mergeRow elements。
     */
-  val indexTypeArray: Seq[(Int, DataType)] = resultSchema.map(info => (fieldIndexMap(info._1), info._2))
+  val indexTypeArray: Seq[FieldIndex] =
+    resultSchema.map(fieldInfo =>
+      FieldIndex(
+        fieldIndexMap(fieldInfo.fieldName),
+        fieldInfo.fieldType))
 
   /**
     * Get the file information of each merge file And build it into a Map.
-    * Map[version->fileInfo]
-    * fileInfo:Array[(Int,DataType)]
+    * Map[writeVersion -> Array(FieldIndex)]
     */
-  val versionFileInfoMap: Map[Long, Array[(Int, DataType)]] = filesInfo.map(t => {
-    t._1.writeVersion -> t._1.fileInfo.map(info => (fieldIndexMap(info._1), info._2)).toArray
+  val versionFileInfoMap: Map[Long, Array[FieldIndex]] = filesInfo.map(t => {
+    t._1.writeVersion ->
+      t._1.fileInfo.map(fieldInfo => FieldIndex(fieldIndexMap(fieldInfo.fieldName), fieldInfo.fieldType)).toArray
   }).toMap
 
   //every column has an ArrayBuffer to keep all the value index of the same primary key
-  private val resultIndex = new Array[ArrayBuffer[(Int, Int)]](resultSchema.length)
+  private val resultIndex = new Array[ArrayBuffer[MergeColumnIndex]](resultSchema.length)
   MergeUtils.intBatchIndexMerge(resultIndex)
 
   private val defaultMergeOp = new DefaultMergeOp[Any]
-  private val mergeOp: Seq[MergeOperator[Any]] = resultSchema.map(m => {
-    if (mergeOperatorInfo.contains(m._1)) {
-      mergeOperatorInfo(m._1)
+  private val mergeOp: Seq[MergeOperator[Any]] = resultSchema.map(fieldInfo => {
+    if (mergeOperatorInfo.contains(fieldInfo.fieldName)) {
+      mergeOperatorInfo(fieldInfo.fieldName)
     } else {
       defaultMergeOp
     }
@@ -91,9 +99,10 @@ class MergeMultiFileWithOperator(filesInfo: Seq[(MergePartitionedFile, Partition
   val mergeHeap = new MergeOptimizeHeap(versionKeyInfoMap)
   mergeHeap.enqueueBySeq(MergeUtils.toBufferedIterator(fileSeq))
 
-  /** initialize mergeBatchColumnIndex and mergeColumnarBatch object */
+  /** initialize mergeColumnIndexMap and mergeColumnarBatch object */
+  //Map[Long, Array[Int]] => Map(write_version, columns_index_of_this_file_reader_in_total_index_array)
   val mergeColumnIndexMap: mutable.Map[Long, Array[Int]] = mutable.Map[Long, Array[Int]]()
-  //initialize mergeBatchColumnIndex, create column index for all files by write version
+  //initialize mergeColumnIndexMap, create column index array for all files, ordered by write version
   MergeUtils.initMergeBatchAndMergeIndex(fileSeq, mergeColumnIndexMap)
   //initialize mergeColumnarBatch object
   val mergeColumnarBatch: MergeColumnarBatchNew = MergeUtils.initMergeBatchNew(fileSeq, mergeOp, indexTypeArray)
@@ -111,7 +120,7 @@ class MergeMultiFileWithOperator(filesInfo: Seq[(MergePartitionedFile, Partition
   def getTemporaryRow(): Array[Any] = {
     temporaryRow.zipWithIndex.map(m => {
       val index = m._2
-      val dt = resultSchema(index)._2
+      val dt = resultSchema(index).fieldType
       getStoredMergeRowByType(temporaryRow(index), mergeOp(index), dt)
     })
   }
@@ -194,8 +203,8 @@ class MergeMultiFileWithOperator(filesInfo: Seq[(MergePartitionedFile, Partition
   def storeRowByMergeBatch(row: MergeOperatorColumnarBatchRow): Unit = {
     for (i <- resultIndex.indices) {
       if (resultIndex(i).nonEmpty) {
-        val fieldType = indexTypeArray(i)
-        getMergeValuesByType(row, i, fieldType._2).foreach(temporaryRow(i) += _)
+        val fieldIndex = indexTypeArray(i)
+        getMergeValuesByType(row, i, fieldIndex.filedType).foreach(temporaryRow(i) += _)
       }
 
     }
@@ -203,12 +212,13 @@ class MergeMultiFileWithOperator(filesInfo: Seq[(MergePartitionedFile, Partition
 
   def storeRow(version: Long, row: InternalRow): Unit = {
     for (i <- versionFileInfoMap(version).indices) {
-      val fieldType = versionFileInfoMap(version)(i)
+      val fieldIndex = versionFileInfoMap(version)(i)
       if (lastVersion == version) {
         //it has duplicate data in one file, we just store the last one
-        temporaryRow(fieldType._1) = temporaryRow(fieldType._1).init += getValueByType(row, i, fieldType._2)
+        //seq.init() == list.removeLast()
+        temporaryRow(fieldIndex.index) = temporaryRow(fieldIndex.index).init += getValueByType(row, i, fieldIndex.filedType)
       } else {
-        temporaryRow(fieldType._1) += getValueByType(row, i, fieldType._2)
+        temporaryRow(fieldIndex.index) += getValueByType(row, i, fieldIndex.filedType)
       }
     }
   }
@@ -221,9 +231,11 @@ class MergeMultiFileWithOperator(filesInfo: Seq[(MergePartitionedFile, Partition
 
     columns.indices.foreach(i => {
       if (lastVersion == writerVersion) {
-        resultIndex(columns(i)._1) = resultIndex(columns(i)._1).init += ((mergeBatchIndex(i), rowAndId._2))
+        //it has duplicate data in one file, we just store the last one
+        //seq.init() == list.removeLast()
+        resultIndex(columns(i).index) = resultIndex(columns(i).index).init += MergeColumnIndex(mergeBatchIndex(i), rowAndId._2)
       } else {
-        resultIndex(columns(i)._1) += ((mergeBatchIndex(i), rowAndId._2))
+        resultIndex(columns(i).index) += MergeColumnIndex(mergeBatchIndex(i), rowAndId._2)
       }
     })
   }
@@ -231,7 +243,7 @@ class MergeMultiFileWithOperator(filesInfo: Seq[(MergePartitionedFile, Partition
   def combineKey(version: Long, row: InternalRow): String = {
     versionKeyInfoMap(version)
       .map(key_type => {
-        row.get(key_type._1, key_type._2).toString
+        row.get(key_type.index, key_type.keyType).toString
       })
       .reduce(_.concat(_))
   }
@@ -285,3 +297,18 @@ class MergeMultiFileWithOperator(filesInfo: Seq[(MergePartitionedFile, Partition
 
 
 }
+
+
+
+/**
+  * @param index filed index in result schema, such as fileResultScheme:[a,k,b], field a is 0, k is 1,b is 2
+  * @param filedType DataType of key field
+  */
+case class FieldIndex(index: Int, filedType: DataType)
+
+/**
+  * Construct an index to locate a value in column vector array of all files.
+  * @param columnVectorIndex index of column vector array of all files
+  * @param rowIndex index of row in a column vector
+  */
+case class MergeColumnIndex(columnVectorIndex: Int, rowIndex: Int)
