@@ -127,12 +127,11 @@ case class StarLakeScanBuilder(sparkSession: SparkSession,
     val fileInfo = fileIndex.getFileInfo(Seq(parseFilter())).groupBy(_.range_partitions)
     val onlyOnePartition = fileInfo.size <= 1
     val hasNoDeltaFile = fileInfo.forall(f => f._2.forall(_.is_base_file))
-    val validFormat = tableInfo.table_name.startsWith("s3") || tableInfo.table_name.startsWith("oss")
-    val canUseAsyncReader = validFormat && sparkSession.sessionState.conf.getConf(StarLakeSQLConf.ASYNC_READER_ENABLE)
 
+    val enableAsyncIO = StarLakeUtils.enableAsyncIO(tableInfo.table_name, sparkSession.sessionState.conf)
 
     if (tableInfo.hash_partition_columns.isEmpty) {
-      parquetScan(canUseAsyncReader)
+      parquetScan(enableAsyncIO)
     }
     else if (onlyOnePartition) {
       if (hasNoDeltaFile) {
@@ -149,7 +148,7 @@ case class StarLakeScanBuilder(sparkSession: SparkSession,
         MultiPartitionMergeBucketScan(sparkSession, hadoopConf, fileIndex, dataSchema, mergeReadDataSchema(),
           readPartitionSchema(), pushedParquetFilters, options, tableInfo, Seq(parseFilter()))
       } else if (hasNoDeltaFile) {
-        parquetScan(canUseAsyncReader)
+        parquetScan(enableAsyncIO)
       } else {
         MultiPartitionMergeScan(sparkSession, hadoopConf, fileIndex, dataSchema, mergeReadDataSchema(),
           readPartitionSchema(), pushedParquetFilters, options, tableInfo, Seq(parseFilter()))
@@ -159,11 +158,11 @@ case class StarLakeScanBuilder(sparkSession: SparkSession,
   }
 
 
-  def parquetScan(canUseAsyncReader: Boolean): Scan = {
+  def parquetScan(enableAsyncIO: Boolean): Scan = {
     val asyncFactoryName = "org.apache.spark.sql.execution.datasources.v2.parquet.AsyncParquetScan"
     val (hasAsyncClass, cls) = StarLakeUtils.getAsyncClass(asyncFactoryName)
 
-    if (canUseAsyncReader && hasAsyncClass) {
+    if (enableAsyncIO && hasAsyncClass) {
       logInfo("======================  async scan   ========================")
 
       val constructor = cls.getConstructors()(0)
