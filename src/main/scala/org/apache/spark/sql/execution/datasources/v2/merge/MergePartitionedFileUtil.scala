@@ -65,7 +65,7 @@ object MergePartitionedFileUtil {
     val touchedFileSchema = requestFilesSchemaMap(touchedFileInfo.range_version).fieldNames
 
     val keyInfo = tableInfo.hash_partition_schema.map(f => {
-      (touchedFileSchema.indexOf(f.name), f.dataType)
+      KeyIndex(touchedFileSchema.indexOf(f.name), f.dataType)
     })
     val fileSchemaInfo = requestFilesSchemaMap(touchedFileInfo.range_version).map(m => (m.name, m.dataType))
     val partitionSchemaInfo = requestPartitionFields.map(m => (m, tableInfo.range_partition_schema(m).dataType))
@@ -79,8 +79,8 @@ object MergePartitionedFileUtil {
       qualifiedName = filePathStr,
       rangeKey = touchedFileInfo.range_key,
       keyInfo = keyInfo,
-      resultSchema = requestDataInfo ++ partitionSchemaInfo,
-      fileInfo = fileSchemaInfo ++ partitionSchemaInfo,
+      resultSchema = (requestDataInfo ++ partitionSchemaInfo).map(m => FieldInfo(m._1, m._2)),
+      fileInfo = (fileSchemaInfo ++ partitionSchemaInfo).map(m => FieldInfo(m._1, m._2)),
       writeVersion = touchedFileInfo.write_version,
       rangeVersion = touchedFileInfo.range_version,
       fileBucketId = touchedFileInfo.file_bucket_id,

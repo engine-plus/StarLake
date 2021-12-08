@@ -182,13 +182,12 @@ abstract class MergeDeltaParquetScan(sparkSession: SparkSession,
         (realColName, mergeClass)
       }).toMap
 
+    val enableAsyncIO = StarLakeUtils.enableAsyncIO(tableInfo.table_name, sparkSession.sessionState.conf)
 
-    val validFormat = tableInfo.table_name.startsWith("s3") || tableInfo.table_name.startsWith("oss")
-    val canUseAsyncReader = validFormat && sparkSession.sessionState.conf.getConf(StarLakeSQLConf.ASYNC_READER_ENABLE)
     val asyncFactoryName = "org.apache.spark.sql.execution.datasources.v2.parquet.MergeParquetPartitionAsyncReaderFactory"
     val (hasAsyncClass, cls) = StarLakeUtils.getAsyncClass(asyncFactoryName)
 
-    if (canUseAsyncReader && hasAsyncClass) {
+    if (enableAsyncIO && hasAsyncClass) {
       logInfo("================  async merge scan   ==============================")
 
       cls.getConstructors()(0)
@@ -407,7 +406,7 @@ case class MultiPartitionMergeBucketScan(sparkSession: SparkSession,
   override def getFilePartitions(conf: SQLConf,
                                  partitionedFiles: Seq[MergePartitionedFile],
                                  bucketNum: Int): Seq[MergeFilePartition] = {
-    val fileWithBucketId = partitionedFiles
+    val fileWithBucketId: Map[Int, Map[String, Seq[MergePartitionedFile]]] = partitionedFiles
       .groupBy(_.fileBucketId)
       .map(f => (f._1, f._2.groupBy(_.rangeKey)))
 

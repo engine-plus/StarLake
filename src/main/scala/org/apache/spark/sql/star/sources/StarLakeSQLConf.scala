@@ -321,11 +321,11 @@ object StarLakeSQLConf {
       .doubleConf
       .createWithDefault(0.1)
 
-  val ASYNC_READER_ENABLE: ConfigEntry[Boolean] =
-    buildConf("async.reader.enable")
+  val ASYNC_IO_ENABLE: ConfigEntry[Boolean] =
+    buildConf("async.io.enable")
       .doc(
         """
-          |Whether async reader can be used.
+          |Whether async reader/writer can be used.
         """.stripMargin)
       .booleanConf
       .createWithDefault(true)

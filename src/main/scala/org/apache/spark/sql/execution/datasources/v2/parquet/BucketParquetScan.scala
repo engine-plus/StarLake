@@ -31,7 +31,6 @@ import org.apache.spark.sql.execution.datasources.{BucketingUtils, FilePartition
 import org.apache.spark.sql.internal.SQLConf
 import org.apache.spark.sql.sources.Filter
 import org.apache.spark.sql.star.StarLakeUtils
-import org.apache.spark.sql.star.sources.StarLakeSQLConf
 import org.apache.spark.sql.star.utils.TableInfo
 import org.apache.spark.sql.types.StructType
 import org.apache.spark.sql.util.CaseInsensitiveStringMap
@@ -83,12 +82,12 @@ case class BucketParquetScan(sparkSession: SparkSession,
     val broadcastedConf = sparkSession.sparkContext.broadcast(
       new SerializableConfiguration(hadoopConf))
 
-    val validFormat = tableInfo.table_name.startsWith("s3") || tableInfo.table_name.startsWith("oss")
-    val canUseAsyncReader = validFormat && sparkSession.sessionState.conf.getConf(StarLakeSQLConf.ASYNC_READER_ENABLE)
+    val enableAsyncIO = StarLakeUtils.enableAsyncIO(tableInfo.table_name, sparkSession.sessionState.conf)
+
     val asyncFactoryName = "org.apache.spark.sql.execution.datasources.v2.parquet.ParquetPartitionAsyncReaderFactory"
     val (hasAsyncClass, cls) = StarLakeUtils.getAsyncClass(asyncFactoryName)
 
-    if (canUseAsyncReader && hasAsyncClass){
+    if (enableAsyncIO && hasAsyncClass) {
       logInfo("================  async bucket scan   ==============================")
 
       cls.getConstructors()(0)
@@ -96,7 +95,7 @@ case class BucketParquetScan(sparkSession: SparkSession,
           dataSchema, readDataSchema, readPartitionSchema, pushedFilters)
         .asInstanceOf[PartitionReaderFactory]
 
-    }else{
+    } else {
       logInfo("================  bucket scan no async  ==============================")
 
       ParquetPartitionReaderFactory(sparkSession.sessionState.conf, broadcastedConf,

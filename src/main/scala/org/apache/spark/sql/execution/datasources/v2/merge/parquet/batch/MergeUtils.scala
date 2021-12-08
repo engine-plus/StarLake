@@ -19,9 +19,8 @@ package org.apache.spark.sql.execution.datasources.v2.merge.parquet.batch
 import org.apache.spark.sql.catalyst.InternalRow
 import org.apache.spark.sql.connector.read.PartitionReader
 import org.apache.spark.sql.execution.datasources.v2.merge.MergePartitionedFile
-import org.apache.spark.sql.execution.datasources.v2.merge.parquet.batch.merge_operator.{MergeColumnarBatchNew, MergeOperator}
-import org.apache.spark.sql.types.DataType
-import org.apache.spark.sql.vectorized.ColumnarBatch
+import org.apache.spark.sql.execution.datasources.v2.merge.parquet.batch.merge_operator.{FieldIndex, MergeColumnIndex, MergeColumnarBatchNew, MergeOperator}
+import org.apache.spark.sql.vectorized.{ColumnVector, ColumnarBatch}
 
 import scala.collection.JavaConverters._
 import scala.collection.mutable.ArrayBuffer
@@ -34,7 +33,7 @@ import scala.collection.{BufferedIterator, mutable}
 object MergeUtils {
 
   /**
-    * to Buffer Itrator
+    * to Buffer Iterator
     *
     * @param seq
     * @return
@@ -57,19 +56,19 @@ object MergeUtils {
   //initialize mergeBatchColumnIndex
   def initMergeBatchAndMergeIndex(fileSeq: Seq[(MergePartitionedFile, ColumnarBatch)],
                                   mergeColumnIndexMap: mutable.Map[Long, Array[Int]]): Unit = {
-    val versionNumsT: Array[(Long, Int)] = fileSeq.sortWith((t1, t2) => t1._1.writeVersion < t2._1.writeVersion)
+    val versionWithColumnNumArr: Array[(Long, Int)] = fileSeq.sortWith((t1, t2) => t1._1.writeVersion < t2._1.writeVersion)
       .toArray.map(t => (t._1.writeVersion, t._2.numCols()))
 
     var lastLen = 0
-    for (i <- versionNumsT.indices) {
+    for (i <- versionWithColumnNumArr.indices) {
       var end: Int = 0
       for (j <- 0 to i) {
-        end += versionNumsT(j)._2
+        end += versionWithColumnNumArr(j)._2
       }
       if (i != 0) {
-        lastLen += versionNumsT(i - 1)._2
+        lastLen += versionWithColumnNumArr(i - 1)._2
       }
-      mergeColumnIndexMap += versionNumsT(i)._1 -> Range(lastLen, end).toArray
+      mergeColumnIndexMap += versionWithColumnNumArr(i)._1 -> Range(lastLen, end).toArray
     }
 
   }
@@ -77,8 +76,8 @@ object MergeUtils {
   //initialize mergeColumnarBatch object
   def initMergeBatchNew(fileSeq: Seq[(MergePartitionedFile, ColumnarBatch)],
                         mergeOps: Seq[MergeOperator[Any]],
-                        indexTypeArray: Seq[(Int, DataType)]): MergeColumnarBatchNew = {
-    val arrayColumn =
+                        indexTypeArray: Seq[FieldIndex]): MergeColumnarBatchNew = {
+    val arrayColumn: Array[ColumnVector] =
       fileSeq.sortWith((t1, t2) => t1._1.writeVersion < t2._1.writeVersion).toArray
         .map(t => {
           Range(0, t._2.numCols()).map(t._2.column)
@@ -94,13 +93,13 @@ object MergeUtils {
     }
   }
 
-  def intBatchIndexMerge(resultIndex: Array[ArrayBuffer[(Int, Int)]]): Unit = {
+  def intBatchIndexMerge(resultIndex: Array[ArrayBuffer[MergeColumnIndex]]): Unit = {
     for (i <- resultIndex.indices) {
-      resultIndex(i) = new ArrayBuffer[(Int, Int)]()
+      resultIndex(i) = new ArrayBuffer[MergeColumnIndex]()
     }
   }
 
-  def resetBatchIndexMerge(resultIndex: Array[ArrayBuffer[(Int, Int)]]): Unit = {
+  def resetBatchIndexMerge(resultIndex: Array[ArrayBuffer[MergeColumnIndex]]): Unit = {
     for (i <- resultIndex.indices) {
       resultIndex(i).clear()
     }

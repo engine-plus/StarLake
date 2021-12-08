@@ -27,10 +27,11 @@ import org.apache.spark.sql.catalyst.plans.logical.LogicalPlan
 import org.apache.spark.sql.execution.datasources.LogicalRelation
 import org.apache.spark.sql.execution.datasources.v2.merge.parquet.batch.merge_operator.MergeOperator
 import org.apache.spark.sql.execution.datasources.v2.{DataSourceV2Relation, DataSourceV2ScanRelation}
+import org.apache.spark.sql.internal.SQLConf
 import org.apache.spark.sql.star.catalog.StarLakeTableV2
 import org.apache.spark.sql.star.exception.StarLakeErrors
 import org.apache.spark.sql.star.rules.StarLakeRelation
-import org.apache.spark.sql.star.sources.{StarLakeBaseRelation, StarLakeSourceUtils}
+import org.apache.spark.sql.star.sources.{StarLakeBaseRelation, StarLakeSQLConf, StarLakeSourceUtils}
 import org.apache.spark.sql.star.utils.DataFileInfo
 import org.apache.spark.sql.{AnalysisException, SparkSession}
 import org.apache.spark.util.Utils
@@ -48,6 +49,11 @@ object StarLakeUtils extends PredicateHelper {
     sparkSession.conf.set(USE_MATERIAL_REWRITE, "false")
     f
     sparkSession.conf.set(USE_MATERIAL_REWRITE, "true")
+  }
+
+  def enableAsyncIO(tablePath: String, conf: SQLConf): Boolean = {
+    val validFormat = tablePath.startsWith("s3") || tablePath.startsWith("oss")
+    validFormat && conf.getConf(StarLakeSQLConf.ASYNC_IO_ENABLE)
   }
 
   def getClass(className: String): Class[_] = {

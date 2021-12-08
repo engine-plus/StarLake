@@ -21,7 +21,7 @@ import org.apache.spark.sql.catalyst.InternalRow
 import org.apache.spark.sql.catalyst.InternalRow.getAccessor
 import org.apache.spark.sql.catalyst.expressions.GenericInternalRow
 import org.apache.spark.sql.connector.read.PartitionReader
-import org.apache.spark.sql.execution.datasources.v2.merge.MergePartitionedFile
+import org.apache.spark.sql.execution.datasources.v2.merge.{KeyIndex, MergePartitionedFile}
 import org.apache.spark.sql.types._
 import org.apache.spark.sql.vectorized.ColumnarBatch
 
@@ -61,16 +61,16 @@ import scala.collection.JavaConverters._
 class MergeSingletonFile(filesInfo: Seq[(MergePartitionedFile, PartitionReader[ColumnarBatch])]) extends MergeLogic {
 
   //initialize index
-  val keyInfoArray: Array[(Int, DataType)] = filesInfo.head._1.keyInfo.toArray
+  val keyInfoArray: Array[KeyIndex] = filesInfo.head._1.keyInfo.toArray
 
-  val typeArray: Array[DataType] = filesInfo.head._1.fileInfo.map(_._2).toArray
+  val typeArray: Array[DataType] = filesInfo.head._1.fileInfo.map(_.fieldType).toArray
 
   var temporaryRow: Array[Any] = new Array[Any](filesInfo.head._1.resultSchema.length)
   // get next batch
   var fileSeq: Seq[(MergePartitionedFile, ColumnarBatch)] = MergeUtils.getNextBatch(filesInfo)
 
-  val fileSchema: Seq[String] = filesInfo.head._1.fileInfo.map(_._1)
-  val resIndex: Array[Int] = filesInfo.head._1.resultSchema.map(_._1).map(schema => {
+  val fileSchema: Seq[String] = filesInfo.head._1.fileInfo.map(_.fieldName)
+  val resIndex: Array[Int] = filesInfo.head._1.resultSchema.map(_.fieldName).map(schema => {
     fileSchema.indexOf(schema)
   }).toArray
 
@@ -133,8 +133,8 @@ class MergeSingletonFile(filesInfo: Seq[(MergePartitionedFile, PartitionReader[C
   }
 
   def combineKey(row: InternalRow): String = {
-    keyInfoArray.map(keyType => {
-      row.get(keyType._1, keyType._2).toString
+    keyInfoArray.map(keyIndex => {
+      row.get(keyIndex.index, keyIndex.keyType).toString
     })
       .reduce(_.concat(_))
   }
