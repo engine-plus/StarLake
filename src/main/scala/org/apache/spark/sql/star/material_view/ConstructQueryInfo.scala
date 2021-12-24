@@ -32,7 +32,7 @@ import scala.collection.mutable
 import scala.collection.mutable.ArrayBuffer
 import scala.collection.JavaConverters._
 
-class ConstructQueryInfo extends ConstructProperties{
+class ConstructQueryInfo extends ConstructProperties {
   private var firstConstruct: Boolean = true
 
   private val outputInfo: mutable.Map[String, String] = mutable.Map[String, String]()
@@ -94,7 +94,7 @@ class ConstructQueryInfo extends ConstructProperties{
     conditionEqualInfo += ((left, right))
   }
 
-  def addConditionOrInfo(orInfo: OrInfo): Unit ={
+  def addConditionOrInfo(orInfo: OrInfo): Unit = {
     conditionOrInfo += orInfo
   }
 
@@ -144,10 +144,10 @@ class ConstructQueryInfo extends ConstructProperties{
     val columnAsInfoNew = columnAsInfoTmp.map(m => {
       var flag = true
       var value = m._2
-      while(flag){
-        if(columnAsInfoTmp.contains(value)){
+      while (flag) {
+        if (columnAsInfoTmp.contains(value)) {
           value = columnAsInfoTmp(value)
-        }else{
+        } else {
           flag = false
         }
       }
@@ -158,16 +158,15 @@ class ConstructQueryInfo extends ConstructProperties{
       //replace temp table to final star table
       val formatName = replaceByTableInfo(tables, m._2)
 
-      val finalName = if (columnAsInfoNew.contains(formatName)){
+      val finalName = if (columnAsInfoNew.contains(formatName)) {
         //replace alias fields to final star table fields
         columnAsInfoNew(formatName)
-      }else{
+      } else {
         formatName
       }
 
       m._1 -> finalName
     }).toMap
-
 
 
     val columnEqualInfoTmp = columnEqualInfo.map(m => {
@@ -178,12 +177,12 @@ class ConstructQueryInfo extends ConstructProperties{
 
     val columnEqualInfoNew: ArrayBuffer[mutable.Set[String]] = new ArrayBuffer[mutable.Set[String]]()
 
-    for (info <- columnEqualInfoTmp){
+    for (info <- columnEqualInfoTmp) {
       val find = columnEqualInfoNew.find(f => f.contains(info._1) || f.contains(info._2))
-      if (find.isDefined){
+      if (find.isDefined) {
         find.get.add(info._1)
         find.get.add(info._2)
-      }else{
+      } else {
         val set = mutable.Set[String]()
         set.add(info._1)
         set.add(info._2)
@@ -258,7 +257,6 @@ class ConstructQueryInfo extends ConstructProperties{
     }
 
 
-
     val aggregateInfoNew = aggregateInfo.buildAggregateDetail(tables, columnAsInfoNew)
 
     val conditionEqualInfoNew = conditionEqualInfo.map(m => {
@@ -327,7 +325,6 @@ object ConstructQueryInfo {
     jsonMap.put("outputInfo", JSON.toJSON(outputMap).toString)
 
 
-
     val columnEqualInfoString = info.columnEqualInfo
       .map(m => m.mkString(MetaUtils.STAR_LAKE_SEP_01))
       .mkString(MetaUtils.STAR_LAKE_SEP_02)
@@ -363,7 +360,6 @@ object ConstructQueryInfo {
     jsonMap.put("conditionOrInfo", JSON.toJSON(conditionOrMap).toString)
 
 
-
     jsonMap.put("otherInfo", info.otherInfo.mkString(MetaUtils.STAR_LAKE_SEP_01))
 
 
@@ -383,9 +379,9 @@ object ConstructQueryInfo {
     val outputInfo = outputJson.getInnerMap.asScala.map(m => m._1 -> m._2.toString).toMap
 
     val columnEqualInfoString = jsonObj.getString("columnEqualInfo")
-    val columnEqualInfo = if(columnEqualInfoString.equals("")){
+    val columnEqualInfo = if (columnEqualInfoString.equals("")) {
       Seq.empty[Set[String]]
-    }else{
+    } else {
       columnEqualInfoString
         .split(MetaUtils.STAR_LAKE_SEP_02)
         .map(m => m.split(MetaUtils.STAR_LAKE_SEP_01).toSet)
@@ -421,7 +417,6 @@ object ConstructQueryInfo {
     } else {
       otherInfoString.split(MetaUtils.STAR_LAKE_SEP_01).toSeq
     }
-
 
 
     val tableInfo = Map.empty[String, String]

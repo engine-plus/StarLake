@@ -80,6 +80,7 @@ class MergeOptimizeHeap(versionKey: Map[Long, Array[KeyIndex]]) extends MergeHea
 
   /**
     * Init merge heap, add each (write_version->bufferedIterator) into heap.
+    *
     * @param fileInfoSeq (write_version, rowIterator().zipWithIndex.buffered)
     */
   def enqueueBySeq(fileInfoSeq: Seq[(Long, BufferedIterator[(InternalRow, Int)])]): Unit = {

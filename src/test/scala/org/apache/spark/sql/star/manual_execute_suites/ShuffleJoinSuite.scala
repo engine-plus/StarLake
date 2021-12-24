@@ -22,7 +22,7 @@ import org.apache.spark.sql.functions.{col, last}
 import org.apache.spark.sql.star.test.TestUtils
 import org.apache.spark.util.Utils
 
-class ShuffleJoinSuite extends Logging{
+class ShuffleJoinSuite extends Logging {
   def run(): Unit = {
     val table_name1 = Utils.createTempDir().getCanonicalPath
     val table_name2 = Utils.createTempDir().getCanonicalPath

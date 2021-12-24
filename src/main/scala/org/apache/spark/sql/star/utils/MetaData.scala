@@ -163,7 +163,7 @@ case class commitStateInfo(state: CommitState.Value,
 /**
   * undo log info
   *
-  * @param tag  commit identifier，0 is committing，greater than 0 is rollback，-1 is redoing
+  * @param tag commit identifier，0 is committing，greater than 0 is rollback，-1 is redoing
   */
 case class undoLogInfo(commit_type: String,
                        table_id: String,

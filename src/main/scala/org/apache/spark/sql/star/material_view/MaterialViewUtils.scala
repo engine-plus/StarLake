@@ -88,7 +88,7 @@ object MaterialViewUtils extends PredicateHelper {
 
 
     plan match {
-        //fast failed
+      //fast failed
       case e: Range =>
         throw StarLakeErrors.canNotCreateMaterialViewOrRewriteQueryException(s"unsupport plan ${e.toString()}")
 

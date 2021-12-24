@@ -71,16 +71,16 @@
             <artifactId>spark-core_${scala.binary.version}</artifactId>
             <version>${spark.version}</version>
             <scope>${local.scope}</scope>
-<!--            <exclusions>-->
-<!--                <exclusion>-->
-<!--                    <artifactId>scala-library</artifactId>-->
-<!--                    <groupId>org.scala-lang</groupId>-->
-<!--                </exclusion>-->
-<!--                <exclusion>-->
-<!--                    <artifactId>netty-all</artifactId>-->
-<!--                    <groupId>io.netty</groupId>-->
-<!--                </exclusion>-->
-<!--            </exclusions>-->
+            <!--            <exclusions>-->
+            <!--                <exclusion>-->
+            <!--                    <artifactId>scala-library</artifactId>-->
+            <!--                    <groupId>org.scala-lang</groupId>-->
+            <!--                </exclusion>-->
+            <!--                <exclusion>-->
+            <!--                    <artifactId>netty-all</artifactId>-->
+            <!--                    <groupId>io.netty</groupId>-->
+            <!--                </exclusion>-->
+            <!--            </exclusions>-->
         </dependency>
 
         <dependency>
@@ -237,7 +237,6 @@
         </dependency>
 
 
-
         <dependency>
             <groupId>org.apache.parquet</groupId>
             <artifactId>parquet-hadoop</artifactId>
@@ -261,49 +260,47 @@
         </dependency>
 
 
+        <!--        <dependency>-->
+        <!--            <groupId>com.engineplus.dataplatform</groupId>-->
+        <!--            <artifactId>async-filesystem</artifactId>-->
+        <!--            <version>1.0.0</version>-->
+        <!--            <exclusions>-->
+        <!--                <exclusion>-->
+        <!--                    <artifactId>jackson-annotations</artifactId>-->
+        <!--                    <groupId>com.fasterxml.jackson.core</groupId>-->
+        <!--                </exclusion>-->
+        <!--            </exclusions>-->
+        <!--        </dependency>-->
+
+        <!--        <dependency>-->
+        <!--            <groupId>com.engineplus.dataplatform</groupId>-->
+        <!--            <artifactId>async-reader</artifactId>-->
+        <!--            <version>1.0.0</version>-->
+        <!--        </dependency>-->
+        <!--        <dependency>-->
+        <!--            <groupId>com.engineplus.dataplatform</groupId>-->
+        <!--            <artifactId>parquet-datasource</artifactId>-->
+        <!--            <version>1.0.0</version>-->
+        <!--        </dependency>-->
 
 
-<!--        <dependency>-->
-<!--            <groupId>com.engineplus.dataplatform</groupId>-->
-<!--            <artifactId>async-filesystem</artifactId>-->
-<!--            <version>1.0.0</version>-->
-<!--            <exclusions>-->
-<!--                <exclusion>-->
-<!--                    <artifactId>jackson-annotations</artifactId>-->
-<!--                    <groupId>com.fasterxml.jackson.core</groupId>-->
-<!--                </exclusion>-->
-<!--            </exclusions>-->
-<!--        </dependency>-->
+        <!--        <dependency>-->
+        <!--            <groupId>org.scala-lang.modules</groupId>-->
+        <!--            <artifactId>scala-async_2.12</artifactId>-->
+        <!--            <version>0.9.7</version>-->
+        <!--        </dependency>-->
 
-<!--        <dependency>-->
-<!--            <groupId>com.engineplus.dataplatform</groupId>-->
-<!--            <artifactId>async-reader</artifactId>-->
-<!--            <version>1.0.0</version>-->
-<!--        </dependency>-->
-<!--        <dependency>-->
-<!--            <groupId>com.engineplus.dataplatform</groupId>-->
-<!--            <artifactId>parquet-datasource</artifactId>-->
-<!--            <version>1.0.0</version>-->
-<!--        </dependency>-->
+        <!--        <dependency>-->
+        <!--            <groupId>org.scala-lang.modules</groupId>-->
+        <!--            <artifactId>scala-java8-compat_2.12</artifactId>-->
+        <!--            <version>0.9.0</version>-->
+        <!--        </dependency>-->
 
-
-<!--        <dependency>-->
-<!--            <groupId>org.scala-lang.modules</groupId>-->
-<!--            <artifactId>scala-async_2.12</artifactId>-->
-<!--            <version>0.9.7</version>-->
-<!--        </dependency>-->
-
-<!--        <dependency>-->
-<!--            <groupId>org.scala-lang.modules</groupId>-->
-<!--            <artifactId>scala-java8-compat_2.12</artifactId>-->
-<!--            <version>0.9.0</version>-->
-<!--        </dependency>-->
-
-<!--        <dependency>-->
-<!--            <groupId>net.jodah</groupId>-->
-<!--            <artifactId>failsafe</artifactId>-->
-<!--            <version>2.4.0</version>-->
-<!--        </dependency>-->
+        <!--        <dependency>-->
+        <!--            <groupId>net.jodah</groupId>-->
+        <!--            <artifactId>failsafe</artifactId>-->
+        <!--            <version>2.4.0</version>-->
+        <!--        </dependency>-->
 
 
     </dependencies>

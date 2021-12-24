@@ -72,9 +72,9 @@ object StarLakePartFileMerge {
                 commitFlag)
 
               //compaction should commit success
-              if (isCompactionCommand && !flag){
+              if (isCompactionCommand && !flag) {
                 throw StarLakeErrors.compactionFailedWithPartMergeException()
-              }else {
+              } else {
                 commitFlag = flag
               }
 

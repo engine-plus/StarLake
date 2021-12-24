@@ -299,16 +299,16 @@ class MergeMultiFileWithOperator(filesInfo: Seq[(MergePartitionedFile, Partition
 }
 
 
-
 /**
-  * @param index filed index in result schema, such as fileResultScheme:[a,k,b], field a is 0, k is 1,b is 2
+  * @param index     filed index in result schema, such as ResultScheme:[a,k,b], field a is 0, k is 1,b is 2
   * @param filedType DataType of key field
   */
 case class FieldIndex(index: Int, filedType: DataType)
 
 /**
   * Construct an index to locate a value in column vector array of all files.
+  *
   * @param columnVectorIndex index of column vector array of all files
-  * @param rowIndex index of row in a column vector
+  * @param rowIndex          index of row in a column vector
   */
 case class MergeColumnIndex(columnVectorIndex: Int, rowIndex: Int)

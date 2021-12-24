@@ -142,7 +142,7 @@ class UpsertAfterCompaction {
 
 }
 
-object UpsertAfterCompaction{
+object UpsertAfterCompaction {
   def main(args: Array[String]): Unit = {
     new UpsertAfterCompaction().execute(true)
   }

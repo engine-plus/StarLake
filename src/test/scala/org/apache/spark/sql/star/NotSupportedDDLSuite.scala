@@ -128,17 +128,17 @@ abstract class NotSupportedDDLBase extends QueryTest
 
   test("ANALYZE TABLE PARTITION") {
     assertUnsupported(s"ANALYZE TABLE $partitionedTableName PARTITION (p1) COMPUTE STATISTICS",
-    "analyze table is not supported for v2 tables")
+      "analyze table is not supported for v2 tables")
   }
 
   test("ALTER TABLE ADD PARTITION") {
     assertUnsupported(s"ALTER TABLE $partitionedTableName ADD PARTITION (p1=3)",
-    "can not alter partitions")
+      "can not alter partitions")
   }
 
   test("ALTER TABLE DROP PARTITION") {
     assertUnsupported(s"ALTER TABLE $partitionedTableName DROP PARTITION (p1=2)",
-    "can not alter partitions")
+      "can not alter partitions")
   }
 
   test("ALTER TABLE RECOVER PARTITIONS") {
@@ -158,7 +158,7 @@ abstract class NotSupportedDDLBase extends QueryTest
   test("LOAD DATA") {
     assertUnsupported(
       s"""LOAD DATA LOCAL INPATH '/path/to/home' INTO TABLE $nonPartitionedTableName""",
-    "load data is not supported for v2 tables")
+      "load data is not supported for v2 tables")
   }
 
   test("INSERT OVERWRITE DIRECTORY") {

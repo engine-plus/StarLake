@@ -404,35 +404,35 @@ abstract class DDLTestBase extends QueryTest with SQLTestUtils {
   }
 
   //From Spark 3.1: SHOW CREATE TABLE is not supported for v2 tables
-//  test("SHOW CREATE TABLE should not include OPTIONS except for path") {
-//    withTable("star_test") {
-//      sql(
-//        s"""
-//           |CREATE TABLE star_test(a LONG, b String)
-//           |USING star
-//           """.stripMargin)
-//
-//      val statement = sql("SHOW CREATE TABLE star_test").collect()(0).getString(0)
-//      assert(!statement.contains("OPTION"))
-//    }
-//
-//    withTempDir { dir =>
-//      withTable("star_test") {
-//        val path = dir.getCanonicalPath()
-//        sql(
-//          s"""
-//             |CREATE TABLE star_test(a LONG, b String)
-//             |USING star
-//             |LOCATION '$path'
-//             """.stripMargin)
-//
-//        val statement = sql("SHOW CREATE TABLE star_test").collect()(0).getString(0)
-//        assert(statement.contains(
-//          s"LOCATION '${CatalogUtils.URIToString(makeQualifiedPath(path))}'"))
-//        assert(!statement.contains("OPTION"))
-//      }
-//    }
-//  }
+  //  test("SHOW CREATE TABLE should not include OPTIONS except for path") {
+  //    withTable("star_test") {
+  //      sql(
+  //        s"""
+  //           |CREATE TABLE star_test(a LONG, b String)
+  //           |USING star
+  //           """.stripMargin)
+  //
+  //      val statement = sql("SHOW CREATE TABLE star_test").collect()(0).getString(0)
+  //      assert(!statement.contains("OPTION"))
+  //    }
+  //
+  //    withTempDir { dir =>
+  //      withTable("star_test") {
+  //        val path = dir.getCanonicalPath()
+  //        sql(
+  //          s"""
+  //             |CREATE TABLE star_test(a LONG, b String)
+  //             |USING star
+  //             |LOCATION '$path'
+  //             """.stripMargin)
+  //
+  //        val statement = sql("SHOW CREATE TABLE star_test").collect()(0).getString(0)
+  //        assert(statement.contains(
+  //          s"LOCATION '${CatalogUtils.URIToString(makeQualifiedPath(path))}'"))
+  //        assert(!statement.contains("OPTION"))
+  //      }
+  //    }
+  //  }
 
   test("DESCRIBE TABLE for partitioned table") {
     withTempDir { dir =>

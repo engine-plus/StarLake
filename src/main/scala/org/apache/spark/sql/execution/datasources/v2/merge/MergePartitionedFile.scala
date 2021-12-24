@@ -56,7 +56,7 @@ case class MergePartitionedFile(partitionValues: InternalRow,
 case class FieldInfo(fieldName: String, fieldType: DataType)
 
 /**
-  * @param index hash key index in file result schema, such as fileResultScheme:[a,k,b], keyIndex is 1
+  * @param index   hash key index in file result schema, such as fileResultScheme:[a,k,b], keyIndex is 1
   * @param keyType DataType of key field
   */
 case class KeyIndex(index: Int, keyType: DataType)

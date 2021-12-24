@@ -333,7 +333,7 @@ object MetaCommit extends Logging {
 
   def takePartitionsWriteLock(meta_info: MetaInfo, commit_id: String, times: Int = 0): MetaInfo = {
     val new_partition_info_arr_buf = new ArrayBuffer[PartitionInfo]()
-    val partition_info_itr = meta_info.partitionInfoArray.iterator
+    val partition_info_itr = meta_info.partitionInfoArray.sortBy(_.range_id).iterator
 
     try {
       while (partition_info_itr.hasNext) {

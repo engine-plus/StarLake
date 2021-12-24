@@ -23,8 +23,9 @@ import org.apache.spark.sql.vectorized.ColumnVector
 
 /**
   * Construct a column batch for merged result.
-  * @param columns ordered column vectors of all file
-  * @param mergeOps merge operators
+  *
+  * @param columns        ordered column vectors of all file
+  * @param mergeOps       merge operators
   * @param indexTypeArray result schema index and type
   */
 class MergeColumnarBatchNew(columns: Array[ColumnVector],

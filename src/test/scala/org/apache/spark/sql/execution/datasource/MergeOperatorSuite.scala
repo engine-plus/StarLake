@@ -113,7 +113,7 @@ class MergeOperatorSuite extends QueryTest
 
   }
 
-  test("perform merge operator on non-hash partitioned table should failed"){
+  test("perform merge operator on non-hash partitioned table should failed") {
     new MergeOpInt().register(spark, "intOp")
 
     withTempDir(dir => {
@@ -126,7 +126,7 @@ class MergeOperatorSuite extends QueryTest
 
       val starTable = StarTable.forPath(tableName)
 
-      val e = intercept[AssertionError]{
+      val e = intercept[AssertionError] {
         starTable.toDF.withColumn("v2", expr("intOp(v2)")).show()
       }
       assert(e.getMessage.contains("Merge operator should be used with hash partitioned table"))
@@ -450,7 +450,7 @@ class MergeOperatorSuite extends QueryTest
   }
 
 
-  test("merge operator on different columns with multi level project should success"){
+  test("merge operator on different columns with multi level project should success") {
     new MergeOpString().register(spark, "stringOp")
     new MergeOpInt().register(spark, "intOp")
 
@@ -473,7 +473,7 @@ class MergeOperatorSuite extends QueryTest
       )
 
       val df = starTable.toDF.select("range", "hash", "v1", "v2")
-          .withColumn("v1", expr("stringOp(v1)"))
+        .withColumn("v1", expr("stringOp(v1)"))
         .withColumn("v2", expr("intOp(v2)"))
         .select("range", "hash", "v1", "v2")
       df.explain("extended")
@@ -487,10 +487,6 @@ class MergeOperatorSuite extends QueryTest
     })
 
   }
-
-
-
-
 
 
 }

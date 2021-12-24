@@ -26,8 +26,8 @@ import org.apache.spark.unsafe.types.{CalendarInterval, UTF8String}
 
 /**
   *
-  * @param columns ordered column vectors of all file
-  * @param mergeOps merge operators
+  * @param columns        ordered column vectors of all file
+  * @param mergeOps       merge operators
   * @param indexTypeArray result schema index and type
   */
 class MergeOperatorColumnarBatchRow(columns: Array[ColumnVector],
@@ -44,9 +44,9 @@ class MergeOperatorColumnarBatchRow(columns: Array[ColumnVector],
 
 
   //merge data from idMix
-  def mergeValues(): Unit ={
+  def mergeValues(): Unit = {
     idMix.zipWithIndex.foreach(m => {
-      if(m._1.nonEmpty){
+      if (m._1.nonEmpty) {
         val dataType = indexTypeArray(m._2).filedType
         dataType match {
           case StringType => mergeUTF8String(m._1, m._2)
@@ -166,21 +166,18 @@ class MergeOperatorColumnarBatchRow(columns: Array[ColumnVector],
   }
 
 
-
-
-
   /** merge values */
 
   def mergeBoolean(colIdAndRowId: Seq[MergeColumnIndex], ordinal: Int): Unit = {
-    if(getMergeOp(ordinal).isInstanceOf[DefaultMergeOp[Any]]){
-      if (columns(colIdAndRowId.last.columnVectorIndex).isNullAt(colIdAndRowId.last.rowIndex)){
+    if (getMergeOp(ordinal).isInstanceOf[DefaultMergeOp[Any]]) {
+      if (columns(colIdAndRowId.last.columnVectorIndex).isNullAt(colIdAndRowId.last.rowIndex)) {
         value(ordinal) = null
-      }else{
+      } else {
         value(ordinal) = columns(colIdAndRowId.last.columnVectorIndex).getBoolean(colIdAndRowId.last.rowIndex)
       }
-    }else{
+    } else {
       val data = colIdAndRowId.map(m => {
-        if(columns(m.columnVectorIndex).isNullAt(m.rowIndex)) {
+        if (columns(m.columnVectorIndex).isNullAt(m.rowIndex)) {
           null
         } else {
           columns(m.columnVectorIndex).getBoolean(m.rowIndex)
@@ -193,15 +190,15 @@ class MergeOperatorColumnarBatchRow(columns: Array[ColumnVector],
   }
 
   def mergeByte(colIdAndRowId: Seq[MergeColumnIndex], ordinal: Int): Unit = {
-    if(getMergeOp(ordinal).isInstanceOf[DefaultMergeOp[Any]]){
-      if (columns(colIdAndRowId.last.columnVectorIndex).isNullAt(colIdAndRowId.last.rowIndex)){
+    if (getMergeOp(ordinal).isInstanceOf[DefaultMergeOp[Any]]) {
+      if (columns(colIdAndRowId.last.columnVectorIndex).isNullAt(colIdAndRowId.last.rowIndex)) {
         value(ordinal) = null
-      }else{
+      } else {
         value(ordinal) = columns(colIdAndRowId.last.columnVectorIndex).getByte(colIdAndRowId.last.rowIndex)
       }
-    }else{
+    } else {
       val data = colIdAndRowId.map(m => {
-        if(columns(m.columnVectorIndex).isNullAt(m.rowIndex)) {
+        if (columns(m.columnVectorIndex).isNullAt(m.rowIndex)) {
           null
         } else {
           columns(m.columnVectorIndex).getByte(m.rowIndex)
@@ -214,15 +211,15 @@ class MergeOperatorColumnarBatchRow(columns: Array[ColumnVector],
   }
 
   def mergeShort(colIdAndRowId: Seq[MergeColumnIndex], ordinal: Int): Unit = {
-    if(getMergeOp(ordinal).isInstanceOf[DefaultMergeOp[Any]]){
-      if (columns(colIdAndRowId.last.columnVectorIndex).isNullAt(colIdAndRowId.last.rowIndex)){
+    if (getMergeOp(ordinal).isInstanceOf[DefaultMergeOp[Any]]) {
+      if (columns(colIdAndRowId.last.columnVectorIndex).isNullAt(colIdAndRowId.last.rowIndex)) {
         value(ordinal) = null
-      }else{
+      } else {
         value(ordinal) = columns(colIdAndRowId.last.columnVectorIndex).getShort(colIdAndRowId.last.rowIndex)
       }
-    }else{
+    } else {
       val data = colIdAndRowId.map(m => {
-        if(columns(m.columnVectorIndex).isNullAt(m.rowIndex)) {
+        if (columns(m.columnVectorIndex).isNullAt(m.rowIndex)) {
           null
         } else {
           columns(m.columnVectorIndex).getShort(m.rowIndex)
@@ -235,15 +232,15 @@ class MergeOperatorColumnarBatchRow(columns: Array[ColumnVector],
   }
 
   def mergeInt(colIdAndRowId: Seq[MergeColumnIndex], ordinal: Int): Unit = {
-    if(getMergeOp(ordinal).isInstanceOf[DefaultMergeOp[Any]]){
-      if (columns(colIdAndRowId.last.columnVectorIndex).isNullAt(colIdAndRowId.last.rowIndex)){
+    if (getMergeOp(ordinal).isInstanceOf[DefaultMergeOp[Any]]) {
+      if (columns(colIdAndRowId.last.columnVectorIndex).isNullAt(colIdAndRowId.last.rowIndex)) {
         value(ordinal) = null
-      }else{
+      } else {
         value(ordinal) = columns(colIdAndRowId.last.columnVectorIndex).getInt(colIdAndRowId.last.rowIndex)
       }
-    }else{
+    } else {
       val data = colIdAndRowId.map(m => {
-        if(columns(m.columnVectorIndex).isNullAt(m.rowIndex)) {
+        if (columns(m.columnVectorIndex).isNullAt(m.rowIndex)) {
           null
         } else {
           columns(m.columnVectorIndex).getInt(m.rowIndex)
@@ -256,15 +253,15 @@ class MergeOperatorColumnarBatchRow(columns: Array[ColumnVector],
   }
 
   def mergeLong(colIdAndRowId: Seq[MergeColumnIndex], ordinal: Int): Unit = {
-    if(getMergeOp(ordinal).isInstanceOf[DefaultMergeOp[Any]]){
+    if (getMergeOp(ordinal).isInstanceOf[DefaultMergeOp[Any]]) {
       if (columns(colIdAndRowId.last.columnVectorIndex).isNullAt(colIdAndRowId.last.rowIndex)) {
         value(ordinal) = null
-      }else{
+      } else {
         value(ordinal) = columns(colIdAndRowId.last.columnVectorIndex).getLong(colIdAndRowId.last.rowIndex)
       }
-    }else{
+    } else {
       val data = colIdAndRowId.map(m => {
-        if(columns(m.columnVectorIndex).isNullAt(m.rowIndex)) {
+        if (columns(m.columnVectorIndex).isNullAt(m.rowIndex)) {
           null
         } else {
           columns(m.columnVectorIndex).getLong(m.rowIndex)
@@ -277,15 +274,15 @@ class MergeOperatorColumnarBatchRow(columns: Array[ColumnVector],
   }
 
   def mergeFloat(colIdAndRowId: Seq[MergeColumnIndex], ordinal: Int): Unit = {
-    if(getMergeOp(ordinal).isInstanceOf[DefaultMergeOp[Any]]){
-      if (columns(colIdAndRowId.last.columnVectorIndex).isNullAt(colIdAndRowId.last.rowIndex)){
+    if (getMergeOp(ordinal).isInstanceOf[DefaultMergeOp[Any]]) {
+      if (columns(colIdAndRowId.last.columnVectorIndex).isNullAt(colIdAndRowId.last.rowIndex)) {
         value(ordinal) = null
-      }else{
+      } else {
         value(ordinal) = columns(colIdAndRowId.last.columnVectorIndex).getFloat(colIdAndRowId.last.rowIndex)
       }
-    }else{
+    } else {
       val data = colIdAndRowId.map(m => {
-        if(columns(m.columnVectorIndex).isNullAt(m.rowIndex)) {
+        if (columns(m.columnVectorIndex).isNullAt(m.rowIndex)) {
           null
         } else {
           columns(m.columnVectorIndex).getFloat(m.rowIndex)
@@ -298,15 +295,15 @@ class MergeOperatorColumnarBatchRow(columns: Array[ColumnVector],
   }
 
   def mergeDouble(colIdAndRowId: Seq[MergeColumnIndex], ordinal: Int): Unit = {
-    if(getMergeOp(ordinal).isInstanceOf[DefaultMergeOp[Any]]){
-      if (columns(colIdAndRowId.last.columnVectorIndex).isNullAt(colIdAndRowId.last.rowIndex)){
+    if (getMergeOp(ordinal).isInstanceOf[DefaultMergeOp[Any]]) {
+      if (columns(colIdAndRowId.last.columnVectorIndex).isNullAt(colIdAndRowId.last.rowIndex)) {
         value(ordinal) = null
-      }else{
+      } else {
         value(ordinal) = columns(colIdAndRowId.last.columnVectorIndex).getDouble(colIdAndRowId.last.rowIndex)
       }
-    }else{
+    } else {
       val data = colIdAndRowId.map(m => {
-        if(columns(m.columnVectorIndex).isNullAt(m.rowIndex)) {
+        if (columns(m.columnVectorIndex).isNullAt(m.rowIndex)) {
           null
         } else {
           columns(m.columnVectorIndex).getDouble(m.rowIndex)
@@ -319,15 +316,15 @@ class MergeOperatorColumnarBatchRow(columns: Array[ColumnVector],
   }
 
   def mergeDecimal(colIdAndRowId: Seq[MergeColumnIndex], ordinal: Int, precision: Int, scale: Int): Unit = {
-    if(getMergeOp(ordinal).isInstanceOf[DefaultMergeOp[Any]]){
-      if (columns(colIdAndRowId.last.columnVectorIndex).isNullAt(colIdAndRowId.last.rowIndex)){
+    if (getMergeOp(ordinal).isInstanceOf[DefaultMergeOp[Any]]) {
+      if (columns(colIdAndRowId.last.columnVectorIndex).isNullAt(colIdAndRowId.last.rowIndex)) {
         value(ordinal) = null
-      }else{
+      } else {
         value(ordinal) = columns(colIdAndRowId.last.columnVectorIndex).getDecimal(colIdAndRowId.last.rowIndex, precision, scale)
       }
-    }else{
+    } else {
       val data = colIdAndRowId.map(m => {
-        if(columns(m.columnVectorIndex).isNullAt(m.rowIndex)) {
+        if (columns(m.columnVectorIndex).isNullAt(m.rowIndex)) {
           null
         } else {
           columns(m.columnVectorIndex).getDecimal(colIdAndRowId.last.rowIndex, precision, scale)
@@ -340,15 +337,15 @@ class MergeOperatorColumnarBatchRow(columns: Array[ColumnVector],
   }
 
   def mergeUTF8String(colIdAndRowId: Seq[MergeColumnIndex], ordinal: Int): Unit = {
-    if(getMergeOp(ordinal).isInstanceOf[DefaultMergeOp[Any]]){
-      if (columns(colIdAndRowId.last.columnVectorIndex).isNullAt(colIdAndRowId.last.rowIndex)){
+    if (getMergeOp(ordinal).isInstanceOf[DefaultMergeOp[Any]]) {
+      if (columns(colIdAndRowId.last.columnVectorIndex).isNullAt(colIdAndRowId.last.rowIndex)) {
         value(ordinal) = null
-      }else{
+      } else {
         value(ordinal) = columns(colIdAndRowId.last.columnVectorIndex).getUTF8String(colIdAndRowId.last.rowIndex)
       }
-    }else{
+    } else {
       val data = colIdAndRowId.map(m => {
-        if(columns(m.columnVectorIndex).isNullAt(m.rowIndex)) {
+        if (columns(m.columnVectorIndex).isNullAt(m.rowIndex)) {
           null
         } else {
           columns(m.columnVectorIndex).getUTF8String(m.rowIndex).toString
@@ -361,15 +358,15 @@ class MergeOperatorColumnarBatchRow(columns: Array[ColumnVector],
   }
 
   def mergeBinary(colIdAndRowId: Seq[MergeColumnIndex], ordinal: Int): Unit = {
-    if(getMergeOp(ordinal).isInstanceOf[DefaultMergeOp[Any]]){
-      if (columns(colIdAndRowId.last.columnVectorIndex).isNullAt(colIdAndRowId.last.rowIndex)){
+    if (getMergeOp(ordinal).isInstanceOf[DefaultMergeOp[Any]]) {
+      if (columns(colIdAndRowId.last.columnVectorIndex).isNullAt(colIdAndRowId.last.rowIndex)) {
         value(ordinal) = null
-      }else{
+      } else {
         value(ordinal) = columns(colIdAndRowId.last.columnVectorIndex).getBinary(colIdAndRowId.last.rowIndex)
       }
-    }else{
+    } else {
       val data = colIdAndRowId.map(m => {
-        if(columns(m.columnVectorIndex).isNullAt(m.rowIndex)) {
+        if (columns(m.columnVectorIndex).isNullAt(m.rowIndex)) {
           null
         } else {
           columns(m.columnVectorIndex).getBinary(m.rowIndex)
@@ -382,15 +379,15 @@ class MergeOperatorColumnarBatchRow(columns: Array[ColumnVector],
   }
 
   def mergeInterval(colIdAndRowId: Seq[MergeColumnIndex], ordinal: Int): Unit = {
-    if(getMergeOp(ordinal).isInstanceOf[DefaultMergeOp[Any]]){
-      if (columns(colIdAndRowId.last.columnVectorIndex).isNullAt(colIdAndRowId.last.rowIndex)){
+    if (getMergeOp(ordinal).isInstanceOf[DefaultMergeOp[Any]]) {
+      if (columns(colIdAndRowId.last.columnVectorIndex).isNullAt(colIdAndRowId.last.rowIndex)) {
         value(ordinal) = null
-      }else{
+      } else {
         value(ordinal) = columns(colIdAndRowId.last.columnVectorIndex).getInterval(colIdAndRowId.last.rowIndex)
       }
-    }else{
+    } else {
       val data = colIdAndRowId.map(m => {
-        if(columns(m.columnVectorIndex).isNullAt(m.rowIndex)) {
+        if (columns(m.columnVectorIndex).isNullAt(m.rowIndex)) {
           null
         } else {
           columns(m.columnVectorIndex).getInterval(m.rowIndex)
@@ -403,15 +400,15 @@ class MergeOperatorColumnarBatchRow(columns: Array[ColumnVector],
   }
 
   def mergeStruct(colIdAndRowId: Seq[MergeColumnIndex], ordinal: Int, numFields: Int): Unit = {
-    if(getMergeOp(ordinal).isInstanceOf[DefaultMergeOp[Any]]){
-      if (columns(colIdAndRowId.last.columnVectorIndex).isNullAt(colIdAndRowId.last.rowIndex)){
+    if (getMergeOp(ordinal).isInstanceOf[DefaultMergeOp[Any]]) {
+      if (columns(colIdAndRowId.last.columnVectorIndex).isNullAt(colIdAndRowId.last.rowIndex)) {
         value(ordinal) = null
-      }else{
+      } else {
         value(ordinal) = columns(colIdAndRowId.last.columnVectorIndex).getStruct(colIdAndRowId.last.rowIndex)
       }
-    }else{
+    } else {
       val data = colIdAndRowId.map(m => {
-        if(columns(m.columnVectorIndex).isNullAt(m.rowIndex)) {
+        if (columns(m.columnVectorIndex).isNullAt(m.rowIndex)) {
           null
         } else {
           columns(m.columnVectorIndex).getStruct(m.rowIndex)
@@ -424,15 +421,15 @@ class MergeOperatorColumnarBatchRow(columns: Array[ColumnVector],
   }
 
   def mergeArray(colIdAndRowId: Seq[MergeColumnIndex], ordinal: Int): Unit = {
-    if(getMergeOp(ordinal).isInstanceOf[DefaultMergeOp[Any]]){
-      if (columns(colIdAndRowId.last.columnVectorIndex).isNullAt(colIdAndRowId.last.rowIndex)){
+    if (getMergeOp(ordinal).isInstanceOf[DefaultMergeOp[Any]]) {
+      if (columns(colIdAndRowId.last.columnVectorIndex).isNullAt(colIdAndRowId.last.rowIndex)) {
         value(ordinal) = null
-      }else{
+      } else {
         value(ordinal) = columns(colIdAndRowId.last.columnVectorIndex).getArray(colIdAndRowId.last.rowIndex)
       }
-    }else{
+    } else {
       val data = colIdAndRowId.map(m => {
-        if(columns(m.columnVectorIndex).isNullAt(m.rowIndex)) {
+        if (columns(m.columnVectorIndex).isNullAt(m.rowIndex)) {
           null
         } else {
           columns(m.columnVectorIndex).getArray(m.rowIndex)
@@ -445,15 +442,15 @@ class MergeOperatorColumnarBatchRow(columns: Array[ColumnVector],
   }
 
   def mergeMap(colIdAndRowId: Seq[MergeColumnIndex], ordinal: Int): Unit = {
-    if(getMergeOp(ordinal).isInstanceOf[DefaultMergeOp[Any]]){
-      if (columns(colIdAndRowId.last.columnVectorIndex).isNullAt(colIdAndRowId.last.rowIndex)){
+    if (getMergeOp(ordinal).isInstanceOf[DefaultMergeOp[Any]]) {
+      if (columns(colIdAndRowId.last.columnVectorIndex).isNullAt(colIdAndRowId.last.rowIndex)) {
         value(ordinal) = null
-      }else{
+      } else {
         value(ordinal) = columns(colIdAndRowId.last.columnVectorIndex).getMap(colIdAndRowId.last.rowIndex)
       }
-    }else{
+    } else {
       val data = colIdAndRowId.map(m => {
-        if(columns(m.columnVectorIndex).isNullAt(m.rowIndex)) {
+        if (columns(m.columnVectorIndex).isNullAt(m.rowIndex)) {
           null
         } else {
           columns(m.columnVectorIndex).getMap(m.rowIndex)
@@ -466,8 +463,6 @@ class MergeOperatorColumnarBatchRow(columns: Array[ColumnVector],
   }
 
 
-
-
   ///////////////////////////////////////////////////////////////////////////////////
 
 
@@ -477,7 +472,7 @@ class MergeOperatorColumnarBatchRow(columns: Array[ColumnVector],
     val colIdAndRowId = getIndex(ordinal)
 
     colIdAndRowId.map(m => {
-      if(columns(m.columnVectorIndex).isNullAt(m.rowIndex)) {
+      if (columns(m.columnVectorIndex).isNullAt(m.rowIndex)) {
         null
       } else {
         columns(m.columnVectorIndex).getBoolean(m.rowIndex)
@@ -489,7 +484,7 @@ class MergeOperatorColumnarBatchRow(columns: Array[ColumnVector],
     val colIdAndRowId = getIndex(ordinal)
 
     colIdAndRowId.map(m => {
-      if(columns(m.columnVectorIndex).isNullAt(m.rowIndex)) {
+      if (columns(m.columnVectorIndex).isNullAt(m.rowIndex)) {
         null
       } else {
         columns(m.columnVectorIndex).getByte(m.rowIndex)
@@ -501,7 +496,7 @@ class MergeOperatorColumnarBatchRow(columns: Array[ColumnVector],
     val colIdAndRowId = getIndex(ordinal)
 
     colIdAndRowId.map(m => {
-      if(columns(m.columnVectorIndex).isNullAt(m.rowIndex)) {
+      if (columns(m.columnVectorIndex).isNullAt(m.rowIndex)) {
         null
       } else {
         columns(m.columnVectorIndex).getShort(m.rowIndex)
@@ -513,7 +508,7 @@ class MergeOperatorColumnarBatchRow(columns: Array[ColumnVector],
     val colIdAndRowId = getIndex(ordinal)
 
     colIdAndRowId.map(m => {
-      if(columns(m.columnVectorIndex).isNullAt(m.rowIndex)) {
+      if (columns(m.columnVectorIndex).isNullAt(m.rowIndex)) {
         null
       } else {
         columns(m.columnVectorIndex).getInt(m.rowIndex)
@@ -525,7 +520,7 @@ class MergeOperatorColumnarBatchRow(columns: Array[ColumnVector],
     val colIdAndRowId = getIndex(ordinal)
 
     colIdAndRowId.map(m => {
-      if(columns(m.columnVectorIndex).isNullAt(m.rowIndex)) {
+      if (columns(m.columnVectorIndex).isNullAt(m.rowIndex)) {
         null
       } else {
         columns(m.columnVectorIndex).getLong(m.rowIndex)
@@ -537,7 +532,7 @@ class MergeOperatorColumnarBatchRow(columns: Array[ColumnVector],
     val colIdAndRowId = getIndex(ordinal)
 
     colIdAndRowId.map(m => {
-      if(columns(m.columnVectorIndex).isNullAt(m.rowIndex)) {
+      if (columns(m.columnVectorIndex).isNullAt(m.rowIndex)) {
         null
       } else {
         columns(m.columnVectorIndex).getFloat(m.rowIndex)
@@ -549,7 +544,7 @@ class MergeOperatorColumnarBatchRow(columns: Array[ColumnVector],
     val colIdAndRowId = getIndex(ordinal)
 
     colIdAndRowId.map(m => {
-      if(columns(m.columnVectorIndex).isNullAt(m.rowIndex)) {
+      if (columns(m.columnVectorIndex).isNullAt(m.rowIndex)) {
         null
       } else {
         columns(m.columnVectorIndex).getDouble(m.rowIndex)
@@ -561,7 +556,7 @@ class MergeOperatorColumnarBatchRow(columns: Array[ColumnVector],
     val colIdAndRowId = getIndex(ordinal)
 
     colIdAndRowId.map(m => {
-      if(columns(m.columnVectorIndex).isNullAt(m.rowIndex)) {
+      if (columns(m.columnVectorIndex).isNullAt(m.rowIndex)) {
         null
       } else {
         columns(m.columnVectorIndex).getDecimal(m.rowIndex, precision, scale)
@@ -573,7 +568,7 @@ class MergeOperatorColumnarBatchRow(columns: Array[ColumnVector],
     val colIdAndRowId = getIndex(ordinal)
 
     colIdAndRowId.map(m => {
-      if(columns(m.columnVectorIndex).isNullAt(m.rowIndex)) {
+      if (columns(m.columnVectorIndex).isNullAt(m.rowIndex)) {
         null
       } else {
         columns(m.columnVectorIndex).getUTF8String(m.rowIndex).clone()
@@ -586,7 +581,7 @@ class MergeOperatorColumnarBatchRow(columns: Array[ColumnVector],
     columns(colIdAndRowId.head.columnVectorIndex).getBinary(colIdAndRowId.head.rowIndex)
 
     colIdAndRowId.map(m => {
-      if(columns(m.columnVectorIndex).isNullAt(m.rowIndex)) {
+      if (columns(m.columnVectorIndex).isNullAt(m.rowIndex)) {
         null
       } else {
         columns(m.columnVectorIndex).getBinary(m.rowIndex)
@@ -599,7 +594,7 @@ class MergeOperatorColumnarBatchRow(columns: Array[ColumnVector],
     columns(colIdAndRowId.head.columnVectorIndex).getInterval(colIdAndRowId.head.rowIndex)
 
     colIdAndRowId.map(m => {
-      if(columns(m.columnVectorIndex).isNullAt(m.rowIndex)) {
+      if (columns(m.columnVectorIndex).isNullAt(m.rowIndex)) {
         null
       } else {
         columns(m.columnVectorIndex).getInterval(m.rowIndex)
@@ -611,7 +606,7 @@ class MergeOperatorColumnarBatchRow(columns: Array[ColumnVector],
     val colIdAndRowId = getIndex(ordinal)
 
     colIdAndRowId.map(m => {
-      if(columns(m.columnVectorIndex).isNullAt(m.rowIndex)) {
+      if (columns(m.columnVectorIndex).isNullAt(m.rowIndex)) {
         null
       } else {
         columns(m.columnVectorIndex).getStruct(m.rowIndex)
@@ -624,7 +619,7 @@ class MergeOperatorColumnarBatchRow(columns: Array[ColumnVector],
     columns(colIdAndRowId.head.columnVectorIndex).getArray(colIdAndRowId.head.rowIndex)
 
     colIdAndRowId.map(m => {
-      if(columns(m.columnVectorIndex).isNullAt(m.rowIndex)) {
+      if (columns(m.columnVectorIndex).isNullAt(m.rowIndex)) {
         null
       } else {
         columns(m.columnVectorIndex).getArray(m.rowIndex)
@@ -636,7 +631,7 @@ class MergeOperatorColumnarBatchRow(columns: Array[ColumnVector],
     val colIdAndRowId = getIndex(ordinal)
 
     colIdAndRowId.map(m => {
-      if(columns(m.columnVectorIndex).isNullAt(m.rowIndex)) {
+      if (columns(m.columnVectorIndex).isNullAt(m.rowIndex)) {
         null
       } else {
         columns(m.columnVectorIndex).getMap(m.rowIndex)

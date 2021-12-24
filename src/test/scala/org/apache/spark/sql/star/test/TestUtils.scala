@@ -37,7 +37,7 @@ object TestUtils {
     sparkConf.set("spark.sql.shuffle.partitions", "10")
     sparkConf.set("spark.sql.streaming.schemaInference", "true")
     sparkConf.set("spark.engineplus.star.meta.streaming_info.timeout", "120000")
-//    sparkConf.set("spark.engineplus.star.parquet.block.size", "20")
+    //    sparkConf.set("spark.engineplus.star.parquet.block.size", "20")
 
     sparkConf.set("spark.default.parallelism", "8")
 
@@ -120,7 +120,7 @@ object TestUtils {
   }
 
 
-  def getStr(num: Int): String ={
+  def getStr(num: Int): String = {
     val rand = scala.util.Random
     (0 until num).map(n => rand.alphanumeric.head).mkString("")
   }
@@ -183,20 +183,20 @@ object TestUtils {
 }
 
 
-class MergeOpInt extends MergeOperator[Int]{
+class MergeOpInt extends MergeOperator[Int] {
   override def mergeData(input: Seq[Int]): Int = {
     input.sum
   }
 }
 
 
-class MergeOpString extends MergeOperator[String]{
+class MergeOpString extends MergeOperator[String] {
   override def mergeData(input: Seq[String]): String = {
     input.mkString(",")
   }
 }
 
-class MergeOpString02 extends MergeOperator[String]{
+class MergeOpString02 extends MergeOperator[String] {
   override def mergeData(input: Seq[String]): String = {
     input.mkString(";")
   }

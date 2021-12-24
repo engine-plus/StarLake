@@ -22,7 +22,7 @@ import org.apache.spark.sql.types.*;
 
 abstract class MergeBatchRow extends InternalRow {
 
-    void setRowData(int i, DataType dt, GenericInternalRow row){
+    void setRowData(int i, DataType dt, GenericInternalRow row) {
         if (dt instanceof BooleanType) {
             row.setBoolean(i, getBoolean(i));
         } else if (dt instanceof ByteType) {

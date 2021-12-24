@@ -90,24 +90,24 @@ class CleanupSuite extends QueryTest
 
   }
 
-  test("simple cleanup"){
+  test("simple cleanup") {
     withSQLConf(StarLakeSQLConf.OLD_VERSION_RETENTION_TIME.key -> "1") {
       withTempDir(dir => {
         val tablePath = dir.getCanonicalPath
-        Seq((1,1,1),(1,2,2),(2,3,3)).toDF("range","hash","value")
+        Seq((1, 1, 1), (1, 2, 2), (2, 3, 3)).toDF("range", "hash", "value")
           .write.mode("overwrite")
           .format("star")
-          .option("rangePartitions","range")
+          .option("rangePartitions", "range")
           .option("hashPartitions", "hash")
           .option("hashBucketNum", "1")
           .save(tablePath)
         val snapshotManagement = SnapshotManagement(tablePath)
         val oldFile = new Path(snapshotManagement.snapshot.allDataInfo.head.file_path).toUri
 
-        Seq((1,1,1),(1,2,2),(2,3,3)).toDF("range","hash","value")
+        Seq((1, 1, 1), (1, 2, 2), (2, 3, 3)).toDF("range", "hash", "value")
           .write.mode("overwrite")
           .format("star")
-          .option("rangePartitions","range")
+          .option("rangePartitions", "range")
           .option("hashPartitions", "hash")
           .option("hashBucketNum", "1")
           .save(tablePath)

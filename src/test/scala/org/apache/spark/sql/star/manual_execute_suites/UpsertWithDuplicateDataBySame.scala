@@ -21,7 +21,7 @@ import org.apache.spark.sql.functions.{col, last}
 import org.apache.spark.sql.star.test.TestUtils
 import org.apache.spark.util.Utils
 
-object UpsertWithDuplicateDataBySame{
+object UpsertWithDuplicateDataBySame {
   def main(args: Array[String]): Unit = {
     new UpsertWithDuplicateDataBySame().execute(true)
   }
